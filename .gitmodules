@@ -1,0 +1,9 @@
+[submodule "buildscripts"]
+	path = buildscripts
+	url = https://github.com/void-spark/esp32_win_buildscripts.git
+[submodule "components/wifi_helper"]
+	path = components/wifi_helper
+	url = https://github.com/void-spark/esp32_wifi_helper.git
+[submodule "components/mqtt_helper"]
+	path = components/mqtt_helper
+	url = https://github.com/void-spark/esp32_mqtt_helper.git
