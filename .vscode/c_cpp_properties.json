@@ -1,0 +1,82 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}",
+                "${workspaceFolder}/build/config",
+                "${workspaceFolder}/components/mqtt_helper/include",
+                "${workspaceFolder}/components/wifi_helper/include",
+                "${workspaceFolder}/main",
+                "${workspaceFolder}/sdk/idf/components/app_update/include",
+                "${workspaceFolder}/sdk/idf/components/bootloader_support/include",
+                "${workspaceFolder}/sdk/idf/components/driver/esp32/include",
+                "${workspaceFolder}/sdk/idf/components/driver/include",
+                "${workspaceFolder}/sdk/idf/components/esp32/include",
+                "${workspaceFolder}/sdk/idf/components/esp_common/include",
+                "${workspaceFolder}/sdk/idf/components/esp_eth/include",
+                "${workspaceFolder}/sdk/idf/components/esp_event/include",
+                "${workspaceFolder}/sdk/idf/components/esp_http_client/include",
+                "${workspaceFolder}/sdk/idf/components/esp_https_ota/include",
+                "${workspaceFolder}/sdk/idf/components/esp_hw_support/include",
+                "${workspaceFolder}/sdk/idf/components/esp_netif/include",
+                "${workspaceFolder}/sdk/idf/components/esp_ringbuf/include",
+                "${workspaceFolder}/sdk/idf/components/esp_rom/include",
+                "${workspaceFolder}/sdk/idf/components/esp_system/include",
+                "${workspaceFolder}/sdk/idf/components/esp_timer/include",
+                "${workspaceFolder}/sdk/idf/components/esp_wifi/include",
+                "${workspaceFolder}/sdk/idf/components/fatfs/src",
+                "${workspaceFolder}/sdk/idf/components/fatfs/vfs",
+                "${workspaceFolder}/sdk/idf/components/freertos/esp_additions/include",
+                "${workspaceFolder}/sdk/idf/components/freertos/esp_additions/include/freertos",
+                "${workspaceFolder}/sdk/idf/components/freertos/FreeRTOS-Kernel/include",
+                "${workspaceFolder}/sdk/idf/components/freertos/FreeRTOS-Kernel/portable/xtensa/include",
+                "${workspaceFolder}/sdk/idf/components/hal/esp32/include",
+                "${workspaceFolder}/sdk/idf/components/hal/include",
+                "${workspaceFolder}/sdk/idf/components/heap/include",
+                "${workspaceFolder}/sdk/idf/components/log/include",
+                "${workspaceFolder}/sdk/idf/components/lwip/include/apps",
+                "${workspaceFolder}/sdk/idf/components/lwip/include/apps/sntp",
+                "${workspaceFolder}/sdk/idf/components/lwip/lwip/src/include",
+                "${workspaceFolder}/sdk/idf/components/lwip/port/esp32/include",
+                "${workspaceFolder}/sdk/idf/components/mqtt/esp-mqtt/include",
+                "${workspaceFolder}/sdk/idf/components/newlib/platform_include",
+                "${workspaceFolder}/sdk/idf/components/nghttp/port/include",
+                "${workspaceFolder}/sdk/idf/components/nvs_flash/include",
+                "${workspaceFolder}/sdk/idf/components/sdmmc/include",
+                "${workspaceFolder}/sdk/idf/components/soc/esp32/include",
+                "${workspaceFolder}/sdk/idf/components/soc/include",
+                "${workspaceFolder}/sdk/idf/components/spi_flash/include",
+                "${workspaceFolder}/sdk/idf/components/tcpip_adapter/include",
+                "${workspaceFolder}/sdk/idf/components/vfs/include",
+                "${workspaceFolder}/sdk/idf/components/wear_levelling/include",
+                "${workspaceFolder}/sdk/idf/components/xtensa/esp32/include",
+                "${workspaceFolder}/sdk/idf/components/xtensa/include",
+                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2021r2-8.4.0/xtensa-esp32-elf/lib/gcc/xtensa-esp32-elf/8.4.0/include",
+                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2021r2-8.4.0/xtensa-esp32-elf/xtensa-esp32-elf/include"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}",
+                    "${workspaceFolder}/components",
+                    "${workspaceFolder}/sdk/idf/components",
+                    "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2021r2-8.4.0/xtensa-esp32-elf/lib/gcc/xtensa-esp32-elf/8.4.0/include",
+                    "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2021r2-8.4.0/xtensa-esp32-elf/xtensa-esp32-elf/include"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            },
+            "defines": [
+                "ESP_PLATFORM",
+                "configUSE_TIMERS=1",
+                "configSUPPORT_DYNAMIC_ALLOCATION=1",
+                "configUSE_QUEUE_SETS=1"
+            ],
+            "intelliSenseMode": "clang-x64",
+            "cStandard": "c11",
+            "cppStandard": "c++11",
+            "compilerPath": ""
+        }
+    ],
+    "version": 4
+}
