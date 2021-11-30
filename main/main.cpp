@@ -73,6 +73,10 @@ messageType readMessage() {
     while(true) {
         size_t rxReady = 0;
         ESP_ERROR_CHECK(uart_get_buffered_data_len(UART_NUM_2, &rxReady));
+        if(rxReady == 0) {
+            // Always wait for at least one byte, even if there is none available.
+            rxReady = 1;
+        }
         const int rxBytes = uart_read_bytes(UART_NUM_2, data, rxReady, 1000 / portTICK_RATE_MS);
 
         for(int bufferPos = 0 ; bufferPos < rxBytes; bufferPos++) {
@@ -204,31 +208,31 @@ bool handleMotorMessage() {
     } while (message.target != 0x02 && message.target != 0x0C);
 
     if(message.data[0] == 0x10 && message.data[1] == 0x20) { // Handoff back to battery
-        ESP_LOGI(TAG, "|HNDF");
+        // ESP_LOGI(TAG, "|HNDF");
         return true; // Control back to us
     } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x01 && message.data[3] == 0x12) { // MYSTERY BATTERY COMMAND 12
-        ESP_LOGI(TAG, "|BT:12");
+        // ESP_LOGI(TAG, "|BT:12");
         uint8_t cmd[] = {0x02, 0x20, 0x12};
         writeMessage(cmd, sizeof(cmd));
         return false;
     } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x00 && message.data[3] == 0x11) { // MYSTERY BATTERY COMMAND 11
-        ESP_LOGI(TAG, "|BT:11");
+        // ESP_LOGI(TAG, "|BT:11");
         uint8_t cmd[] = {0x02, 0x20, 0x11};
         writeMessage(cmd, sizeof(cmd));
         return false;
     } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x04 && message.data[3] == 0x08 && message.data[5] == 0x38 && message.data[7] == 0x3a) { // GET DATA 9438283a
-        ESP_LOGI(TAG, "|GET");
+        // ESP_LOGI(TAG, "|GET");
         // uint8_t cmd[] = {0x02, 0x2b, 0x08, 0x00, 0x94, 0x38, 0x40, 0x5a, 0x28, 0x3a, 0x3e, 0x6b, 0x0c, 0x51};
         uint8_t cmd[] = {0x02, 0x2b, 0x08, 0x00, 0x94, 0x38, 0x4b, 0x15, 0x28, 0x3a, 0x3e, 0x91, 0x79, 0x50}; // This needs to be good calibration data!
         writeMessage(cmd, sizeof(cmd));
         return false;
     } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x0a && message.data[3] == 0x09 && message.data[5] == 0xc0 && message.data[9] == 0xc1) {  // PUT DATA c0/c1
-        ESP_LOGI(TAG, "|PUT");
+        // ESP_LOGI(TAG, "|PUT");
         uint8_t cmd[] = {0x02, 0x21, 0x09, 0x00};
         writeMessage(cmd, sizeof(cmd));
         return false;
     } else if(message.data[0] == 0x10 && message.data[1] == 0xc1 && message.data[2] == 0x00 && message.data[3] == 0x20) { // GET DISPLAY SERIAL
-        ESP_LOGI(TAG, "|SER");
+        // ESP_LOGI(TAG, "|SER");
         uint8_t cmd[] = {0x02, 0xc8, 0x20, 0x15, 0x27, 0x10, 0x00, 0x00, 0x00, 0x06, 0x66};
         writeMessage(cmd, sizeof(cmd));
         return false;
