@@ -256,6 +256,31 @@ void handoff() {
 
 void my_task(void *pvParameter) {
 
+    uart_config_t uart_config = {};
+    uart_config.baud_rate = 9600;
+    uart_config.data_bits = UART_DATA_8_BITS;
+    uart_config.parity = UART_PARITY_DISABLE;
+    uart_config.stop_bits = UART_STOP_BITS_1;
+    uart_config.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
+    uart_config.source_clk = UART_SCLK_APB;
+
+    uart_intr_config_t uart_intr = {};
+    uart_intr.intr_enable_mask = UART_RXFIFO_FULL_INT_ENA_M
+                               | UART_RXFIFO_TOUT_INT_ENA_M
+                               | UART_RXFIFO_OVF_INT_ENA_M
+                               | UART_BRK_DET_INT_ENA_M
+                               | UART_PARITY_ERR_INT_ENA_M;
+
+    uart_intr.rxfifo_full_thresh = 1; // This should speed things up.
+    uart_intr.rx_timeout_thresh = 10;
+    uart_intr.txfifo_empty_intr_thresh = 10;
+
+
+    ESP_ERROR_CHECK(uart_driver_install(UART_NUM_2, RX_BUF_SIZE * 2, 0, 0, NULL, 0));
+    ESP_ERROR_CHECK(uart_param_config(UART_NUM_2, &uart_config));
+    ESP_ERROR_CHECK(uart_intr_config(UART_NUM_2, &uart_intr));
+    ESP_ERROR_CHECK(uart_set_pin(UART_NUM_2, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+
     vTaskDelay(500 / portTICK_PERIOD_MS);
 
 
@@ -316,39 +341,13 @@ extern "C" void app_main() {
     }
     ESP_ERROR_CHECK(ret);
 
-    uart_config_t uart_config = {};
-    uart_config.baud_rate = 9600;
-    uart_config.data_bits = UART_DATA_8_BITS;
-    uart_config.parity = UART_PARITY_DISABLE;
-    uart_config.stop_bits = UART_STOP_BITS_1;
-    uart_config.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
-    uart_config.source_clk = UART_SCLK_APB;
-
-    uart_intr_config_t uart_intr = {};
-    uart_intr.intr_enable_mask = UART_RXFIFO_FULL_INT_ENA_M
-                               | UART_RXFIFO_TOUT_INT_ENA_M
-                               | UART_RXFIFO_OVF_INT_ENA_M
-                               | UART_BRK_DET_INT_ENA_M
-                               | UART_PARITY_ERR_INT_ENA_M;
-
-    uart_intr.rxfifo_full_thresh = 1; // This should speed things up.
-    uart_intr.rx_timeout_thresh = 10;
-    uart_intr.txfifo_empty_intr_thresh = 10;
-
-
-    ESP_ERROR_CHECK(uart_driver_install(UART_NUM_2, RX_BUF_SIZE * 2, 0, 0, NULL, 0));
-    ESP_ERROR_CHECK(uart_param_config(UART_NUM_2, &uart_config));
-    ESP_ERROR_CHECK(uart_intr_config(UART_NUM_2, &uart_intr));
-    ESP_ERROR_CHECK(uart_set_pin(UART_NUM_2, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
-
-    xTaskCreatePinnedToCore(my_task, "my_task", 4096, NULL, 5, NULL, APP_CPU_NUM);
-
     wifiStart();
-
     wifiWait();
 
-    mqttStart(subscribeTopics, handleMessage);
+    mqttStart(subscribeTopics, handleMessage);    
     mqttWait();
 
     ESP_LOGI(TAG, "MQTT started");
+
+    xTaskCreatePinnedToCore(my_task, "my_task", 4096, NULL, 5, NULL, APP_CPU_NUM);
 }
