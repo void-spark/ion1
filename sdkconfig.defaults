@@ -11,8 +11,8 @@ CONFIG_PARTITION_TABLE_TWO_OTA=y
 # Yes we know what we're doing and want plain HTTP
 CONFIG_OTA_ALLOW_HTTP=y
 
-# Keeping the clock low prevents the ams1117 from overheating (I run from higher voltage)
-CONFIG_ESP32_DEFAULT_CPU_FREQ_80=y
+# We want no interruptions in the communication, so keep cpu fast
+CONFIG_ESP32_DEFAULT_CPU_FREQ_240=y
 CONFIG_FREERTOS_HZ=1000
 
 # Tweak the stack sizes some, some might be old defaults, I think I did idle on purpose.

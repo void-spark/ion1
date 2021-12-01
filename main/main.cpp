@@ -26,6 +26,12 @@ static const char* ota_url = "http://raspberrypi.fritz.box:8032/esp32/ion1.bin";
 
 #define RX_BUF_SIZE (1024)
 
+static const int TURN_ON_BIT = BIT0;
+static const int TURN_OFF_BIT = BIT1;
+static const int CALIBRATE_BIT = BIT2;
+
+static EventGroupHandle_t controlEventGroup;
+
 
 struct messageType {
     // Payload length is indicated by one nibble, so max value 0xF (15).
@@ -197,7 +203,7 @@ void exchange(uint8_t* cmd, size_t cmdLen) {
     if(message.data[3] != cmd[2]) { // Watch out, cmd doesn't include the leading 0x10
         ESP_LOGE(TAG, "Wrong reply, expected %02x, got %02x",cmd[2], message.data[3]);
     } else {
-        ESP_LOGI(TAG, "<OK!");
+        // ESP_LOGI(TAG, "<OK!");
     }
 }
 
@@ -281,36 +287,41 @@ void my_task(void *pvParameter) {
     ESP_ERROR_CHECK(uart_intr_config(UART_NUM_2, &uart_intr));
     ESP_ERROR_CHECK(uart_set_pin(UART_NUM_2, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 
-    vTaskDelay(500 / portTICK_PERIOD_MS);
+    xEventGroupWaitBits(controlEventGroup, TURN_ON_BIT, true, true, portMAX_DELAY);
 
-
-    ESP_LOGI(TAG, ">MTR:ON");
+    // ESP_LOGI(TAG, ">MTR:ON");
     uint8_t cmd1[] = {0x01, 0x20, 0x30};
     exchange(cmd1, sizeof(cmd1));
 
-    ESP_LOGI(TAG, ">HNDF");
+    // ESP_LOGI(TAG, ">HNDF");
     handoff();
 
-    ESP_LOGI(TAG, ">PUT");
+    // ESP_LOGI(TAG, ">PUT");
     uint8_t cmd2[] = {0x01, 0x28, 0x09, 0x94, 0xb0, 0x09, 0xc4, 0x14, 0xb1, 0x01, 0x14}; // PUT DATA (2500|27.6)
     exchange(cmd2, sizeof(cmd2));
 
-    ESP_LOGI(TAG, ">HNDF");
+    // ESP_LOGI(TAG, ">HNDF");
     handoff();
 
-    ESP_LOGI(TAG, ">ASS:ON");
+    // ESP_LOGI(TAG, ">ASS:ON");
     uint8_t cmd3[] = {0x01, 0x20, 0x32};
     exchange(cmd3, sizeof(cmd3));
 
-    ESP_LOGI(TAG, ">HNDF");
+    // ESP_LOGI(TAG, ">HNDF");
     handoff();
 
-    ESP_LOGI(TAG, ">ASS:POW");
+    // ESP_LOGI(TAG, ">ASS:POW");
     uint8_t cmd4[] = {0x01, 0x21, 0x34, 0x03}; // SET ASSIST LEVEL 03 > POWER!
     exchange(cmd4, sizeof(cmd4));
 
     while(true) {
-        ESP_LOGI(TAG, ">HNDF");
+        EventBits_t bits = xEventGroupWaitBits(controlEventGroup, TURN_OFF_BIT, true, true, 0);
+
+        if((bits & TURN_OFF_BIT) != 0) {
+
+        }
+ 
+        // ESP_LOGI(TAG, ">HNDF");
         handoff();
     }
 
@@ -319,6 +330,7 @@ void my_task(void *pvParameter) {
 
 static void subscribeTopics() {
     subscribeDevTopic("$update");
+    subscribeDevTopic("$command");
 }
 
 static void handleMessage(const char* topic1, const char* topic2, const char* topic3, const char* data) {
@@ -327,7 +339,20 @@ static void handleMessage(const char* topic1, const char* topic2, const char* to
         topic2 == NULL && 
         topic3 == NULL
     ) {
+        xEventGroupSetBits(controlEventGroup, TURN_OFF_BIT);
         xTaskCreate(&ota_task, "ota_task", 8192, NULL, 5, NULL);
+    }
+
+    if(
+        strcmp(topic1, "$command") == 0 && 
+        topic2 == NULL && 
+        topic3 == NULL
+    ) {
+        if(strcmp(data, "on") == 0) {
+            xEventGroupSetBits(controlEventGroup, TURN_ON_BIT);
+        } else if(strcmp(data, "off") == 0) {
+            xEventGroupSetBits(controlEventGroup, TURN_OFF_BIT);
+        }
     }
 }
 
@@ -340,6 +365,8 @@ extern "C" void app_main() {
       ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+
+    controlEventGroup = xEventGroupCreate();
 
     wifiStart();
     wifiWait();
