@@ -5,8 +5,9 @@ CONFIG_ESPTOOLPY_BAUD_921600B=y
 # My chips are 4MB flash, once you use OTA this settings matters
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 
-# Set up partitions for OTA
-CONFIG_PARTITION_TABLE_TWO_OTA=y
+# Set up partitions for OTA and SPIFFS
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
 # Yes we know what we're doing and want plain HTTP
 CONFIG_OTA_ALLOW_HTTP=y
