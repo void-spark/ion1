@@ -47,6 +47,7 @@
                 "${workspaceFolder}/sdk/idf/components/soc/esp32/include",
                 "${workspaceFolder}/sdk/idf/components/soc/include",
                 "${workspaceFolder}/sdk/idf/components/spi_flash/include",
+                "${workspaceFolder}/sdk/idf/components/spiffs/include",
                 "${workspaceFolder}/sdk/idf/components/tcpip_adapter/include",
                 "${workspaceFolder}/sdk/idf/components/vfs/include",
                 "${workspaceFolder}/sdk/idf/components/wear_levelling/include",

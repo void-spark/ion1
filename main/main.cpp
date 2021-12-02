@@ -12,6 +12,7 @@
 #include "esp_log.h"
 #include "esp_wifi.h"
 #include "esp_https_ota.h"
+#include "esp_spiffs.h"
 #include "nvs_flash.h"
 #include "wifi_helper.h"
 #include "mqtt_helper.h"
@@ -260,8 +261,27 @@ void handoff() {
     // print('Control returned to us')
 }
 
-void my_task(void *pvParameter) {
+void init_spiffs() {
+    ESP_LOGI(TAG, "Initializing SPIFFS");
 
+    esp_vfs_spiffs_conf_t spiffs_conf = {};
+    spiffs_conf.base_path = "/spiffs";
+    spiffs_conf.partition_label = NULL;
+    spiffs_conf.max_files = 5;
+    spiffs_conf.format_if_mount_failed = true;
+
+    ESP_ERROR_CHECK(esp_vfs_spiffs_register(&spiffs_conf));
+
+    size_t total = 0, used = 0;
+    esp_err_t ret = esp_spiffs_info(spiffs_conf.partition_label, &total, &used);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s)", esp_err_to_name(ret));
+    } else {
+        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
+    }
+}
+
+void init_uart() {
     uart_config_t uart_config = {};
     uart_config.baud_rate = 9600;
     uart_config.data_bits = UART_DATA_8_BITS;
@@ -281,11 +301,17 @@ void my_task(void *pvParameter) {
     uart_intr.rx_timeout_thresh = 10;
     uart_intr.txfifo_empty_intr_thresh = 10;
 
-
     ESP_ERROR_CHECK(uart_driver_install(UART_NUM_2, RX_BUF_SIZE * 2, 0, 0, NULL, 0));
     ESP_ERROR_CHECK(uart_param_config(UART_NUM_2, &uart_config));
     ESP_ERROR_CHECK(uart_intr_config(UART_NUM_2, &uart_intr));
     ESP_ERROR_CHECK(uart_set_pin(UART_NUM_2, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+}
+
+void my_task(void *pvParameter) {
+
+    init_spiffs();
+
+    init_uart();
 
     xEventGroupWaitBits(controlEventGroup, TURN_ON_BIT, true, true, portMAX_DELAY);
 
