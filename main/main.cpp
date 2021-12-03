@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/unistd.h>
+#include <sys/stat.h>
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -228,13 +230,42 @@ bool handleMotorMessage() {
         writeMessage(cmd, sizeof(cmd));
         return false;
     } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x04 && message.data[3] == 0x08 && message.data[5] == 0x38 && message.data[7] == 0x3a) { // GET DATA 9438283a
-        // ESP_LOGI(TAG, "|GET");
-        // uint8_t cmd[] = {0x02, 0x2b, 0x08, 0x00, 0x94, 0x38, 0x40, 0x5a, 0x28, 0x3a, 0x3e, 0x6b, 0x0c, 0x51};
-        uint8_t cmd[] = {0x02, 0x2b, 0x08, 0x00, 0x94, 0x38, 0x4b, 0x15, 0x28, 0x3a, 0x3e, 0x91, 0x79, 0x50}; // This needs to be good calibration data!
+        // ESP_LOGI(TAG, "|GET-38-3a");
+        uint8_t cmd[] = {0x02, 0x2b, 0x08, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // Data (last 10 bytes) to be replaced
+
+        struct stat st;
+        if(stat("/spiffs/calibration.bin", &st) == 0) {
+            FILE* fp = fopen("/spiffs/calibration.bin", "r");
+            if (fp == NULL) {
+                ESP_LOGE(TAG, "Failed to open calibration file for reading");
+                return false;
+            }
+            fread(cmd + 4, 1, 10, fp);
+            fclose(fp);
+        } else {
+            // Backup data
+            uint8_t data[] = {0x94, 0x38, 0x4b, 0x15, 0x28, 0x3a, 0x3e, 0x91, 0x79, 0x50}; // This needs to be good calibration data!
+            memcpy(cmd + 4, data, 10);
+        }
+
         writeMessage(cmd, sizeof(cmd));
         return false;
     } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x0a && message.data[3] == 0x09 && message.data[5] == 0xc0 && message.data[9] == 0xc1) {  // PUT DATA c0/c1
-        // ESP_LOGI(TAG, "|PUT");
+        // ESP_LOGI(TAG, "|PUT-c0-c1");
+        uint8_t cmd[] = {0x02, 0x21, 0x09, 0x00};
+        writeMessage(cmd, sizeof(cmd));
+        return false;
+    } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x0a && message.data[3] == 0x09 && message.data[5] == 0x38 && message.data[9] == 0x3a) { // PUT DATA 38/3a
+        // ESP_LOGI(TAG, "|PUT-38-3a");
+
+        FILE* fp = fopen("/spiffs/calibration.bin", "w");
+        if (fp == NULL) {
+            ESP_LOGE(TAG, "Failed to open calibration file for writing");
+            return false;
+        }
+        fwrite(message.data + 4, 1, 10, fp);
+        fclose(fp);
+
         uint8_t cmd[] = {0x02, 0x21, 0x09, 0x00};
         writeMessage(cmd, sizeof(cmd));
         return false;
@@ -313,42 +344,74 @@ void my_task(void *pvParameter) {
 
     init_uart();
 
-    xEventGroupWaitBits(controlEventGroup, TURN_ON_BIT, true, true, portMAX_DELAY);
-
-    // ESP_LOGI(TAG, ">MTR:ON");
-    uint8_t cmd1[] = {0x01, 0x20, 0x30};
-    exchange(cmd1, sizeof(cmd1));
-
-    // ESP_LOGI(TAG, ">HNDF");
-    handoff();
-
-    // ESP_LOGI(TAG, ">PUT");
-    uint8_t cmd2[] = {0x01, 0x28, 0x09, 0x94, 0xb0, 0x09, 0xc4, 0x14, 0xb1, 0x01, 0x14}; // PUT DATA (2500|27.6)
-    exchange(cmd2, sizeof(cmd2));
-
-    // ESP_LOGI(TAG, ">HNDF");
-    handoff();
-
-    // ESP_LOGI(TAG, ">ASS:ON");
-    uint8_t cmd3[] = {0x01, 0x20, 0x32};
-    exchange(cmd3, sizeof(cmd3));
-
-    // ESP_LOGI(TAG, ">HNDF");
-    handoff();
-
-    // ESP_LOGI(TAG, ">ASS:POW");
-    uint8_t cmd4[] = {0x01, 0x21, 0x34, 0x03}; // SET ASSIST LEVEL 03 > POWER!
-    exchange(cmd4, sizeof(cmd4));
-
     while(true) {
-        EventBits_t bits = xEventGroupWaitBits(controlEventGroup, TURN_OFF_BIT, true, true, 0);
 
-        if((bits & TURN_OFF_BIT) != 0) {
+        xEventGroupWaitBits(controlEventGroup, TURN_ON_BIT, true, true, portMAX_DELAY);
 
-        }
- 
+        // ESP_LOGI(TAG, ">MTR:ON");
+        uint8_t cmd1[] = {0x01, 0x20, 0x30};
+        exchange(cmd1, sizeof(cmd1));
+
         // ESP_LOGI(TAG, ">HNDF");
         handoff();
+
+        // ESP_LOGI(TAG, ">PUT");
+        uint8_t cmd2[] = {0x01, 0x28, 0x09, 0x94, 0xb0, 0x09, 0xc4, 0x14, 0xb1, 0x01, 0x14}; // PUT DATA (2500|27.6)
+        exchange(cmd2, sizeof(cmd2));
+
+        // ESP_LOGI(TAG, ">HNDF");
+        handoff();
+
+        // ESP_LOGI(TAG, ">ASS:ON");
+        uint8_t cmd3[] = {0x01, 0x20, 0x32};
+        exchange(cmd3, sizeof(cmd3));
+
+        // ESP_LOGI(TAG, ">HNDF");
+        handoff();
+
+        // ESP_LOGI(TAG, ">ASS:POW");
+        uint8_t cmd4[] = {0x01, 0x21, 0x34, 0x03}; // SET ASSIST LEVEL 03 > POWER!
+        exchange(cmd4, sizeof(cmd4));
+
+        while(true) {
+            EventBits_t bits = xEventGroupWaitBits(controlEventGroup, TURN_OFF_BIT, true, true, 0);
+
+            if((bits & TURN_OFF_BIT) != 0) {
+                break;
+            }
+    
+            // ESP_LOGI(TAG, ">HNDF");
+            handoff();
+        }
+
+        // ESP_LOGI(TAG, ">ASS:OFF");
+        uint8_t cmd5[] = {0x01, 0x20, 0x33};
+        exchange(cmd5, sizeof(cmd5));
+
+        // ESP_LOGI(TAG, ">HNDF");
+        handoff();
+
+        // Maybe wait for cmd 12?
+
+        // ESP_LOGI(TAG, ">MTR:OFF");
+        uint8_t cmd6[] = {0x01, 0x21, 0x31, 0x00};
+        exchange(cmd6, sizeof(cmd6));
+
+        // ESP_LOGI(TAG, ">HNDF");
+        handoff();
+
+        // Maybe wait for cmd 11?
+
+        while(true) {
+            EventBits_t bits = xEventGroupWaitBits(controlEventGroup, TURN_ON_BIT, false, true, 0);
+
+            if((bits & TURN_ON_BIT) != 0) {
+                break;
+            }
+
+            // ESP_LOGI(TAG, ">HNDF");
+            handoff();
+        }
     }
 
     vTaskDelete(NULL);
