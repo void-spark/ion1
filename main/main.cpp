@@ -34,6 +34,9 @@ static const char* ota_url = "http://raspberrypi.fritz.box:8032/esp32/ion1.bin";
 static const int TURN_ON_BIT = BIT0;
 static const int TURN_OFF_BIT = BIT1;
 static const int CALIBRATE_BIT = BIT2;
+static const int LEVEL_1_BIT = BIT3;
+static const int LEVEL_2_BIT = BIT4;
+static const int LEVEL_3_BIT = BIT5;
 
 static EventGroupHandle_t controlEventGroup;
 
@@ -393,12 +396,23 @@ void my_task(void *pvParameter) {
         exchange(cmd4, sizeof(cmd4));
 
         while(true) {
-            EventBits_t bits = xEventGroupWaitBits(controlEventGroup, TURN_OFF_BIT, true, true, 0);
-
+            EventBits_t bits = xEventGroupWaitBits(controlEventGroup, TURN_OFF_BIT | LEVEL_1_BIT | LEVEL_2_BIT | LEVEL_3_BIT, true, false, 0);
             if((bits & TURN_OFF_BIT) != 0) {
                 break;
+            } else if((bits & (LEVEL_1_BIT | LEVEL_2_BIT | LEVEL_3_BIT)) != 0) {
+                uint8_t level = 0x00;
+                if((bits & LEVEL_1_BIT) != 0) {
+                    level = 0x01;
+                } else if((bits & LEVEL_2_BIT) != 0) {
+                    level = 0x02;
+                } else if((bits & LEVEL_3_BIT) != 0) {
+                    level = 0x03;
+                }
+                // ESP_LOGI(TAG, ">ASS:LVL");
+                uint8_t cmdl1[] = {0x01, 0x21, 0x34, level};
+                exchange(cmdl1, sizeof(cmdl1));
             }
-    
+
             // ESP_LOGI(TAG, ">HNDF");
             handoff();
         }
@@ -423,7 +437,6 @@ void my_task(void *pvParameter) {
 
         while(true) {
             EventBits_t bits = xEventGroupWaitBits(controlEventGroup, TURN_ON_BIT, false, true, 0);
-
             if((bits & TURN_ON_BIT) != 0) {
                 break;
             }
@@ -438,6 +451,7 @@ void my_task(void *pvParameter) {
 
 static void subscribeTopics() {
     subscribeDevTopic("$update");
+    subscribeDevTopic("$reset");
     subscribeDevTopic("$command");
 }
 
@@ -452,6 +466,14 @@ static void handleMessage(const char* topic1, const char* topic2, const char* to
     }
 
     if(
+        strcmp(topic1, "$reset") == 0 && 
+        topic2 == NULL && 
+        topic3 == NULL
+    ) {
+        esp_restart();
+    }
+
+    if(
         strcmp(topic1, "$command") == 0 && 
         topic2 == NULL && 
         topic3 == NULL
@@ -462,6 +484,12 @@ static void handleMessage(const char* topic1, const char* topic2, const char* to
             xEventGroupSetBits(controlEventGroup, TURN_OFF_BIT);
         } else if(strcmp(data, "cal") == 0) {
             xEventGroupSetBits(controlEventGroup, CALIBRATE_BIT);
+        } else if(strcmp(data, "lvl1") == 0) {
+            xEventGroupSetBits(controlEventGroup, LEVEL_1_BIT);
+        } else if(strcmp(data, "lvl2") == 0) {
+            xEventGroupSetBits(controlEventGroup, LEVEL_2_BIT);
+        } else if(strcmp(data, "lvl3") == 0) {
+            xEventGroupSetBits(controlEventGroup, LEVEL_3_BIT);
         }
     }
 }
