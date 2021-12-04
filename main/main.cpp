@@ -24,6 +24,8 @@ static const char *TAG = "app";
 
 static const char* ota_url = "http://raspberrypi.fritz.box:8032/esp32/ion1.bin";
 
+#define CALIBRATION_FILE "/spiffs/calibration.bin"
+
 #define TXD_PIN (GPIO_NUM_17)
 #define RXD_PIN (GPIO_NUM_16)
 
@@ -234,8 +236,8 @@ bool handleMotorMessage() {
         uint8_t cmd[] = {0x02, 0x2b, 0x08, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // Data (last 10 bytes) to be replaced
 
         struct stat st;
-        if(stat("/spiffs/calibration.bin", &st) == 0) {
-            FILE* fp = fopen("/spiffs/calibration.bin", "r");
+        if(stat(CALIBRATION_FILE, &st) == 0) {
+            FILE* fp = fopen(CALIBRATION_FILE, "r");
             if (fp == NULL) {
                 ESP_LOGE(TAG, "Failed to open calibration file for reading");
                 return false;
@@ -258,7 +260,7 @@ bool handleMotorMessage() {
     } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x0a && message.data[3] == 0x09 && message.data[5] == 0x38 && message.data[9] == 0x3a) { // PUT DATA 38/3a
         // ESP_LOGI(TAG, "|PUT-38-3a");
 
-        FILE* fp = fopen("/spiffs/calibration.bin", "w");
+        FILE* fp = fopen(CALIBRATION_FILE, "w");
         if (fp == NULL) {
             ESP_LOGE(TAG, "Failed to open calibration file for writing");
             return false;
@@ -346,7 +348,24 @@ void my_task(void *pvParameter) {
 
     while(true) {
 
-        xEventGroupWaitBits(controlEventGroup, TURN_ON_BIT, true, true, portMAX_DELAY);
+        EventBits_t bits = xEventGroupWaitBits(controlEventGroup, TURN_ON_BIT | CALIBRATE_BIT, true, false, portMAX_DELAY);
+
+        if((bits & CALIBRATE_BIT) != 0) {
+            // ESP_LOGI(TAG, ">MTR:CAL");
+            uint8_t cmdc1[] = {0x01, 0x20, 0x35};
+            exchange(cmdc1, sizeof(cmdc1));
+
+            // ESP_LOGI(TAG, ">HNDF");
+            handoff();
+
+            // ESP_LOGI(TAG, ">MTR:GET/CAL?");
+            uint8_t cmdc2[] = {0x01, 0x22, 0x08, 0x00, 0xdf};
+            exchange(cmdc2, sizeof(cmdc2));
+
+            handoff();
+
+            continue;
+        }
 
         // ESP_LOGI(TAG, ">MTR:ON");
         uint8_t cmd1[] = {0x01, 0x20, 0x30};
@@ -441,6 +460,8 @@ static void handleMessage(const char* topic1, const char* topic2, const char* to
             xEventGroupSetBits(controlEventGroup, TURN_ON_BIT);
         } else if(strcmp(data, "off") == 0) {
             xEventGroupSetBits(controlEventGroup, TURN_OFF_BIT);
+        } else if(strcmp(data, "cal") == 0) {
+            xEventGroupSetBits(controlEventGroup, CALIBRATE_BIT);
         }
     }
 }
