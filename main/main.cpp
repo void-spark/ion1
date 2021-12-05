@@ -509,7 +509,7 @@ extern "C" void app_main() {
     wifiStart();
     wifiWait();
 
-    mqttStart(subscribeTopics, handleMessage);    
+    mqttStart(subscribeTopics, handleMessage, NULL);
     mqttWait();
 
     ESP_LOGI(TAG, "MQTT started");
