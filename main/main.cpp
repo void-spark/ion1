@@ -18,16 +18,22 @@
 #include "nvs_flash.h"
 #include "wifi_helper.h"
 #include "mqtt_helper.h"
+#include "button.h"
 #include "crc8.h"
 
 static const char *TAG = "app";
 
 static const char* ota_url = "http://raspberrypi.fritz.box:8032/esp32/ion1.bin";
 
+#define SERIAL 0x15, 0x27, 0x10, 0x00, 0x00, 0x00, 0x06, 0x66
+
 #define CALIBRATION_FILE "/spiffs/calibration.bin"
 
 #define TXD_PIN (GPIO_NUM_17)
 #define RXD_PIN (GPIO_NUM_16)
+
+#define BUTTON (GPIO_NUM_0)
+#define LED_BUILTIN (GPIO_NUM_2)
 
 #define RX_BUF_SIZE (1024)
 
@@ -276,7 +282,7 @@ bool handleMotorMessage() {
         return false;
     } else if(message.data[0] == 0x10 && message.data[1] == 0xc1 && message.data[2] == 0x00 && message.data[3] == 0x20) { // GET DISPLAY SERIAL
         // ESP_LOGI(TAG, "|SER");
-        uint8_t cmd[] = {0x02, 0xc8, 0x20, 0x15, 0x27, 0x10, 0x00, 0x00, 0x00, 0x06, 0x66};
+        uint8_t cmd[] = {0x02, 0xc8, 0x20, SERIAL};
         writeMessage(cmd, sizeof(cmd));
         return false;
     }
@@ -515,4 +521,68 @@ extern "C" void app_main() {
     ESP_LOGI(TAG, "MQTT started");
 
     xTaskCreatePinnedToCore(my_task, "my_task", 4096, NULL, 5, NULL, APP_CPU_NUM);
+
+    // TODO: TO TASK
+    gpio_config_t io_conf = {};
+    io_conf.pin_bit_mask = BIT64(LED_BUILTIN);
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
+
+    uint8_t state = 0;
+    bool held = false;
+    button_event_t ev;
+    QueueHandle_t button_events = button_init(BIT64(BUTTON));
+    while (true) {
+        if (xQueueReceive(button_events, &ev, 1000/portTICK_PERIOD_MS)) {
+            if ((ev.pin == BUTTON) && (ev.event == BUTTON_UP)) {
+                held = false;
+                switch (state) {
+                    case 0:
+                        xEventGroupSetBits(controlEventGroup, TURN_ON_BIT);
+                        gpio_set_level(LED_BUILTIN, 1);
+                        vTaskDelay(800 / portTICK_PERIOD_MS);
+                        gpio_set_level(LED_BUILTIN, 0);
+                        vTaskDelay(200 / portTICK_PERIOD_MS);
+                        state++;
+                        break;
+                    case 1:
+                    case 2:
+                    case 3:
+                        xEventGroupSetBits(controlEventGroup, state == 1 ? LEVEL_1_BIT : state == 2 ? LEVEL_2_BIT : LEVEL_3_BIT);
+                        for(int loop = 0; loop < state; loop++) {
+                            gpio_set_level(LED_BUILTIN, 1);
+                            vTaskDelay(250 / portTICK_PERIOD_MS);
+                            gpio_set_level(LED_BUILTIN, 0);
+                            vTaskDelay(200 / portTICK_PERIOD_MS);
+                        }
+                        state++;
+                        break;
+                    case 4:
+                        xEventGroupSetBits(controlEventGroup, TURN_OFF_BIT);
+                        for(int loop = 0; loop < 4; loop++) {
+                            gpio_set_level(LED_BUILTIN, 1);
+                            vTaskDelay(400 / portTICK_PERIOD_MS);
+                            gpio_set_level(LED_BUILTIN, 0);
+                            vTaskDelay(200 / portTICK_PERIOD_MS);
+                        }
+                        state = 0;
+                        break;
+                }
+            }
+            if (!held && state == 0 && (ev.pin == BUTTON) && (ev.event == BUTTON_HELD)) {
+                xEventGroupSetBits(controlEventGroup, CALIBRATE_BIT);
+                for(int loop = 0; loop < 10; loop++) {
+                    gpio_set_level(LED_BUILTIN, 1);
+                    vTaskDelay(100 / portTICK_PERIOD_MS);
+                    gpio_set_level(LED_BUILTIN, 0);
+                    vTaskDelay(100 / portTICK_PERIOD_MS);
+                }
+                held = true;
+            }
+        }
+    }
+
 }

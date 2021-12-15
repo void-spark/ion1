@@ -5,6 +5,7 @@
             "includePath": [
                 "${workspaceFolder}",
                 "${workspaceFolder}/build/config",
+                "${workspaceFolder}/components/esp32-button/include",
                 "${workspaceFolder}/components/mqtt_helper/include",
                 "${workspaceFolder}/components/wifi_helper/include",
                 "${workspaceFolder}/main",

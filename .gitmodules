@@ -7,3 +7,6 @@
 [submodule "components/mqtt_helper"]
 	path = components/mqtt_helper
 	url = https://github.com/void-spark/esp32_mqtt_helper.git
+[submodule "components/esp32-button"]
+	path = components/esp32-button
+	url = https://github.com/void-spark/esp32-button.git
