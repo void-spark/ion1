@@ -1,27 +1,13 @@
 # My chips are 4MB flash, once you use OTA this settings matters
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 
-# Set up partitions for OTA and SPIFFS
+# Set up partitions for SPIFFS
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
-
-# Yes we know what we're doing and want plain HTTP
-CONFIG_OTA_ALLOW_HTTP=y
 
 # We want no interruptions in the communication, so keep cpu fast
 CONFIG_ESP32_DEFAULT_CPU_FREQ_240=y
 CONFIG_FREERTOS_HZ=1000
-
-# We do MQTT stuff (status reports) on the timer, which tends to hit the stack limit (default 2048).
-CONFIG_FREERTOS_TIMER_TASK_STACK_DEPTH=3072
-
-# Disable fancy MQTT things we don't want
-CONFIG_MQTT_TRANSPORT_SSL=
-CONFIG_MQTT_TRANSPORT_WEBSOCKET=
-
-# Pin MQTT task to the system core, just in case
-CONFIG_MQTT_TASK_CORE_SELECTION_ENABLED=y
-CONFIG_MQTT_USE_CORE_0=y
 
 CONFIG_LOG_COLORS=
 #CONFIG_LOG_DEFAULT_LEVEL_DEBUG=y

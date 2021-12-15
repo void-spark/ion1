@@ -12,18 +12,12 @@
 #include "driver/uart.h"
 #include "soc/uart_reg.h"
 #include "esp_log.h"
-#include "esp_wifi.h"
-#include "esp_https_ota.h"
 #include "esp_spiffs.h"
 #include "nvs_flash.h"
-#include "wifi_helper.h"
-#include "mqtt_helper.h"
 #include "button.h"
 #include "crc8.h"
 
 static const char *TAG = "app";
-
-static const char* ota_url = "http://raspberrypi.fritz.box:8032/esp32/ion1.bin";
 
 #define SERIAL 0x15, 0x27, 0x10, 0x00, 0x00, 0x00, 0x06, 0x66
 
@@ -60,23 +54,6 @@ struct messageType {
     int8_t type;
     int8_t size;
 };
-
-static void ota_task(void * pvParameter) {
-    ESP_LOGI(TAG, "Starting OTA update...");
-
-    esp_http_client_config_t config = {};
-    config.url = ota_url;
-
-    esp_err_t ret = esp_https_ota(&config);
-    if (ret == ESP_OK) {
-        esp_restart();
-    } else {
-        ESP_LOGE(TAG, "Firmware Upgrades Failed");
-    }
-    while (1) {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
-}
 
 messageType readMessage() {
 
@@ -455,51 +432,6 @@ void my_task(void *pvParameter) {
     vTaskDelete(NULL);
 }
 
-static void subscribeTopics() {
-    subscribeDevTopic("$update");
-    subscribeDevTopic("$reset");
-    subscribeDevTopic("$command");
-}
-
-static void handleMessage(const char* topic1, const char* topic2, const char* topic3, const char* data) {
-    if(
-        strcmp(topic1, "$update") == 0 && 
-        topic2 == NULL && 
-        topic3 == NULL
-    ) {
-        xEventGroupSetBits(controlEventGroup, TURN_OFF_BIT);
-        xTaskCreate(&ota_task, "ota_task", 8192, NULL, 5, NULL);
-    }
-
-    if(
-        strcmp(topic1, "$reset") == 0 && 
-        topic2 == NULL && 
-        topic3 == NULL
-    ) {
-        esp_restart();
-    }
-
-    if(
-        strcmp(topic1, "$command") == 0 && 
-        topic2 == NULL && 
-        topic3 == NULL
-    ) {
-        if(strcmp(data, "on") == 0) {
-            xEventGroupSetBits(controlEventGroup, TURN_ON_BIT);
-        } else if(strcmp(data, "off") == 0) {
-            xEventGroupSetBits(controlEventGroup, TURN_OFF_BIT);
-        } else if(strcmp(data, "cal") == 0) {
-            xEventGroupSetBits(controlEventGroup, CALIBRATE_BIT);
-        } else if(strcmp(data, "lvl1") == 0) {
-            xEventGroupSetBits(controlEventGroup, LEVEL_1_BIT);
-        } else if(strcmp(data, "lvl2") == 0) {
-            xEventGroupSetBits(controlEventGroup, LEVEL_2_BIT);
-        } else if(strcmp(data, "lvl3") == 0) {
-            xEventGroupSetBits(controlEventGroup, LEVEL_3_BIT);
-        }
-    }
-}
-
 extern "C" void app_main() {
 
     //Initialize NVS
@@ -511,14 +443,6 @@ extern "C" void app_main() {
     ESP_ERROR_CHECK(ret);
 
     controlEventGroup = xEventGroupCreate();
-
-    wifiStart();
-    wifiWait();
-
-    mqttStart(subscribeTopics, handleMessage, NULL);
-    mqttWait();
-
-    ESP_LOGI(TAG, "MQTT started");
 
     xTaskCreatePinnedToCore(my_task, "my_task", 4096, NULL, 5, NULL, APP_CPU_NUM);
 
