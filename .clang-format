@@ -1,0 +1,5 @@
+IndentWidth: 4
+ColumnLimit: 180
+SortIncludes: false
+SpaceBeforeParens: Never
+BinPackParameters: false

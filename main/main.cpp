@@ -40,7 +40,6 @@ static const int LEVEL_3_BIT = BIT5;
 
 static EventGroupHandle_t controlEventGroup;
 
-
 struct messageType {
     // Payload length is indicated by one nibble, so max value 0xF (15).
     // Payload length excludes the starting byte, 2 header bytes, command byte, and crc byte.
@@ -57,9 +56,9 @@ struct messageType {
 
 messageType readMessage() {
 
-    uint8_t* data = (uint8_t*) malloc(RX_BUF_SIZE);
+    uint8_t *data = (uint8_t *)malloc(RX_BUF_SIZE);
 
-    bool escaping = false;    
+    bool escaping = false;
 
     messageType message = {};
     message.target = -1;
@@ -76,7 +75,7 @@ messageType readMessage() {
         }
         const int rxBytes = uart_read_bytes(UART_NUM_2, data, rxReady, 1000 / portTICK_RATE_MS);
 
-        for(int bufferPos = 0 ; bufferPos < rxBytes; bufferPos++) {
+        for(int bufferPos = 0; bufferPos < rxBytes; bufferPos++) {
 
             uint8_t byteRead = data[bufferPos];
             ESP_LOGD(TAG, "Read byte: %d", byteRead);
@@ -111,7 +110,7 @@ messageType readMessage() {
             } else {
                 // Not a message start byte, and we're not escaping, so just parse it normally.
                 input[0] = byteRead;
-                inputLen += 1;          
+                inputLen += 1;
             }
 
             for(int pos = 0; pos < inputLen; pos++) {
@@ -125,13 +124,13 @@ messageType readMessage() {
                         // Ignore single '00' with no leading '10', which is sent by display to wake up system.
                         continue;
                     }
-                } else if (message.length == 1) {
+                } else if(message.length == 1) {
                     // First nibble is always message target.
                     message.target = high;
                     // Second nibble is always message type.
                     message.type = low;
-                } else if (message.length == 2) {
-                    if( message.type == 0x00) {
+                } else if(message.length == 2) {
+                    if(message.type == 0x00) {
                         message.size = 3;
                     } else {
                         message.source = high;
@@ -162,7 +161,7 @@ messageType readMessage() {
     }
 }
 
-void writeMessage(uint8_t* message, uint8_t messageLen) {
+void writeMessage(uint8_t *message, uint8_t messageLen) {
 
     // First create the full message, unescaped, includig crc.
     uint8_t data[20];
@@ -171,7 +170,7 @@ void writeMessage(uint8_t* message, uint8_t messageLen) {
     data[messageLen + 1] = crc8_bow(data, messageLen + 1);
 
     // Now create an escaped copy
-    uint8_t escaped[20*2];
+    uint8_t escaped[20 * 2];
     uint8_t outPos = 0;
     escaped[outPos++] = 0x10;
     for(uint8_t inPos = 1; inPos < messageLen + 2; inPos++) {
@@ -183,16 +182,16 @@ void writeMessage(uint8_t* message, uint8_t messageLen) {
     uart_write_bytes(UART_NUM_2, escaped, outPos);
 }
 
-void exchange(uint8_t* cmd, size_t cmdLen) {
+void exchange(uint8_t *cmd, size_t cmdLen) {
     writeMessage(cmd, cmdLen);
 
     messageType message;
     do {
         message = readMessage();
-    } while (message.target != 0x02 && message.target != 0x0C);
-    
+    } while(message.target != 0x02 && message.target != 0x0C);
+
     if(message.data[3] != cmd[2]) { // Watch out, cmd doesn't include the leading 0x10
-        ESP_LOGE(TAG, "Wrong reply, expected %02x, got %02x",cmd[2], message.data[3]);
+        ESP_LOGE(TAG, "Wrong reply, expected %02x, got %02x", cmd[2], message.data[3]);
     } else {
         // ESP_LOGI(TAG, "<OK!");
     }
@@ -202,11 +201,11 @@ bool handleMotorMessage() {
     messageType message;
     do {
         message = readMessage();
-    } while (message.target != 0x02 && message.target != 0x0C);
+    } while(message.target != 0x02 && message.target != 0x0C);
 
     if(message.data[0] == 0x10 && message.data[1] == 0x20) { // Handoff back to battery
         // ESP_LOGI(TAG, "|HNDF");
-        return true; // Control back to us
+        return true;                                                                                                      // Control back to us
     } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x01 && message.data[3] == 0x12) { // MYSTERY BATTERY COMMAND 12
         // ESP_LOGI(TAG, "|BT:12");
         uint8_t cmd[] = {0x02, 0x20, 0x12};
@@ -217,14 +216,15 @@ bool handleMotorMessage() {
         uint8_t cmd[] = {0x02, 0x20, 0x11};
         writeMessage(cmd, sizeof(cmd));
         return false;
-    } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x04 && message.data[3] == 0x08 && message.data[5] == 0x38 && message.data[7] == 0x3a) { // GET DATA 9438283a
+    } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x04 && message.data[3] == 0x08 && message.data[5] == 0x38 &&
+              message.data[7] == 0x3a) { // GET DATA 9438283a
         // ESP_LOGI(TAG, "|GET-38-3a");
         uint8_t cmd[] = {0x02, 0x2b, 0x08, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // Data (last 10 bytes) to be replaced
 
         struct stat st;
         if(stat(CALIBRATION_FILE, &st) == 0) {
-            FILE* fp = fopen(CALIBRATION_FILE, "r");
-            if (fp == NULL) {
+            FILE *fp = fopen(CALIBRATION_FILE, "r");
+            if(fp == NULL) {
                 ESP_LOGE(TAG, "Failed to open calibration file for reading");
                 return false;
             }
@@ -238,16 +238,18 @@ bool handleMotorMessage() {
 
         writeMessage(cmd, sizeof(cmd));
         return false;
-    } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x0a && message.data[3] == 0x09 && message.data[5] == 0xc0 && message.data[9] == 0xc1) {  // PUT DATA c0/c1
+    } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x0a && message.data[3] == 0x09 && message.data[5] == 0xc0 &&
+              message.data[9] == 0xc1) { // PUT DATA c0/c1
         // ESP_LOGI(TAG, "|PUT-c0-c1");
         uint8_t cmd[] = {0x02, 0x21, 0x09, 0x00};
         writeMessage(cmd, sizeof(cmd));
         return false;
-    } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x0a && message.data[3] == 0x09 && message.data[5] == 0x38 && message.data[9] == 0x3a) { // PUT DATA 38/3a
+    } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x0a && message.data[3] == 0x09 && message.data[5] == 0x38 &&
+              message.data[9] == 0x3a) { // PUT DATA 38/3a
         // ESP_LOGI(TAG, "|PUT-38-3a");
 
-        FILE* fp = fopen(CALIBRATION_FILE, "w");
-        if (fp == NULL) {
+        FILE *fp = fopen(CALIBRATION_FILE, "w");
+        if(fp == NULL) {
             ESP_LOGE(TAG, "Failed to open calibration file for writing");
             return false;
         }
@@ -293,7 +295,7 @@ void init_spiffs() {
 
     size_t total = 0, used = 0;
     esp_err_t ret = esp_spiffs_info(spiffs_conf.partition_label, &total, &used);
-    if (ret != ESP_OK) {
+    if(ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s)", esp_err_to_name(ret));
     } else {
         ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
@@ -310,11 +312,7 @@ void init_uart() {
     uart_config.source_clk = UART_SCLK_APB;
 
     uart_intr_config_t uart_intr = {};
-    uart_intr.intr_enable_mask = UART_RXFIFO_FULL_INT_ENA_M
-                               | UART_RXFIFO_TOUT_INT_ENA_M
-                               | UART_RXFIFO_OVF_INT_ENA_M
-                               | UART_BRK_DET_INT_ENA_M
-                               | UART_PARITY_ERR_INT_ENA_M;
+    uart_intr.intr_enable_mask = UART_RXFIFO_FULL_INT_ENA_M | UART_RXFIFO_TOUT_INT_ENA_M | UART_RXFIFO_OVF_INT_ENA_M | UART_BRK_DET_INT_ENA_M | UART_PARITY_ERR_INT_ENA_M;
 
     uart_intr.rxfifo_full_thresh = 1; // This should speed things up.
     uart_intr.rx_timeout_thresh = 10;
@@ -434,11 +432,11 @@ void my_task(void *pvParameter) {
 
 extern "C" void app_main() {
 
-    //Initialize NVS
+    // Initialize NVS
     esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-      ESP_ERROR_CHECK(nvs_flash_erase());
-      ret = nvs_flash_init();
+    if(ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
 
@@ -459,44 +457,44 @@ extern "C" void app_main() {
     bool held = false;
     button_event_t ev;
     QueueHandle_t button_events = button_init(BIT64(BUTTON));
-    while (true) {
-        if (xQueueReceive(button_events, &ev, 1000/portTICK_PERIOD_MS)) {
-            if ((ev.pin == BUTTON) && (ev.event == BUTTON_UP)) {
+    while(true) {
+        if(xQueueReceive(button_events, &ev, 1000 / portTICK_PERIOD_MS)) {
+            if((ev.pin == BUTTON) && (ev.event == BUTTON_UP)) {
                 held = false;
-                switch (state) {
-                    case 0:
-                        xEventGroupSetBits(controlEventGroup, TURN_ON_BIT);
+                switch(state) {
+                case 0:
+                    xEventGroupSetBits(controlEventGroup, TURN_ON_BIT);
+                    gpio_set_level(LED_BUILTIN, 1);
+                    vTaskDelay(800 / portTICK_PERIOD_MS);
+                    gpio_set_level(LED_BUILTIN, 0);
+                    vTaskDelay(200 / portTICK_PERIOD_MS);
+                    state++;
+                    break;
+                case 1:
+                case 2:
+                case 3:
+                    xEventGroupSetBits(controlEventGroup, state == 1 ? LEVEL_1_BIT : state == 2 ? LEVEL_2_BIT : LEVEL_3_BIT);
+                    for(int loop = 0; loop < state; loop++) {
                         gpio_set_level(LED_BUILTIN, 1);
-                        vTaskDelay(800 / portTICK_PERIOD_MS);
+                        vTaskDelay(250 / portTICK_PERIOD_MS);
                         gpio_set_level(LED_BUILTIN, 0);
                         vTaskDelay(200 / portTICK_PERIOD_MS);
-                        state++;
-                        break;
-                    case 1:
-                    case 2:
-                    case 3:
-                        xEventGroupSetBits(controlEventGroup, state == 1 ? LEVEL_1_BIT : state == 2 ? LEVEL_2_BIT : LEVEL_3_BIT);
-                        for(int loop = 0; loop < state; loop++) {
-                            gpio_set_level(LED_BUILTIN, 1);
-                            vTaskDelay(250 / portTICK_PERIOD_MS);
-                            gpio_set_level(LED_BUILTIN, 0);
-                            vTaskDelay(200 / portTICK_PERIOD_MS);
-                        }
-                        state++;
-                        break;
-                    case 4:
-                        xEventGroupSetBits(controlEventGroup, TURN_OFF_BIT);
-                        for(int loop = 0; loop < 4; loop++) {
-                            gpio_set_level(LED_BUILTIN, 1);
-                            vTaskDelay(400 / portTICK_PERIOD_MS);
-                            gpio_set_level(LED_BUILTIN, 0);
-                            vTaskDelay(200 / portTICK_PERIOD_MS);
-                        }
-                        state = 0;
-                        break;
+                    }
+                    state++;
+                    break;
+                case 4:
+                    xEventGroupSetBits(controlEventGroup, TURN_OFF_BIT);
+                    for(int loop = 0; loop < 4; loop++) {
+                        gpio_set_level(LED_BUILTIN, 1);
+                        vTaskDelay(400 / portTICK_PERIOD_MS);
+                        gpio_set_level(LED_BUILTIN, 0);
+                        vTaskDelay(200 / portTICK_PERIOD_MS);
+                    }
+                    state = 0;
+                    break;
                 }
             }
-            if (!held && state == 0 && (ev.pin == BUTTON) && (ev.event == BUTTON_HELD)) {
+            if(!held && state == 0 && (ev.pin == BUTTON) && (ev.event == BUTTON_HELD)) {
                 xEventGroupSetBits(controlEventGroup, CALIBRATE_BIT);
                 for(int loop = 0; loop < 10; loop++) {
                     gpio_set_level(LED_BUILTIN, 1);
@@ -508,5 +506,4 @@ extern "C" void app_main() {
             }
         }
     }
-
 }
