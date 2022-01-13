@@ -54,7 +54,7 @@ struct messageType {
     int8_t size;
 };
 
-messageType readMessage() {
+static messageType readMessage() {
 
     uint8_t *data = (uint8_t *)malloc(RX_BUF_SIZE);
 
@@ -161,7 +161,7 @@ messageType readMessage() {
     }
 }
 
-void writeMessage(uint8_t *message, uint8_t messageLen) {
+static void writeMessage(uint8_t *message, uint8_t messageLen) {
 
     // First create the full message, unescaped, includig crc.
     uint8_t data[20];
@@ -182,7 +182,7 @@ void writeMessage(uint8_t *message, uint8_t messageLen) {
     uart_write_bytes(UART_NUM_2, escaped, outPos);
 }
 
-void exchange(uint8_t *cmd, size_t cmdLen) {
+static void exchange(uint8_t *cmd, size_t cmdLen) {
     writeMessage(cmd, cmdLen);
 
     messageType message;
@@ -197,7 +197,7 @@ void exchange(uint8_t *cmd, size_t cmdLen) {
     }
 }
 
-bool handleMotorMessage() {
+static bool handleMotorMessage() {
     messageType message;
     do {
         message = readMessage();
@@ -272,7 +272,7 @@ bool handleMotorMessage() {
     return false;
 }
 
-void handoff() {
+static void handoff() {
 
     uint8_t cmd[] = {0x00}; // HANDOFF to motor
     writeMessage(cmd, sizeof(cmd));
@@ -282,7 +282,7 @@ void handoff() {
     // print('Control returned to us')
 }
 
-void init_spiffs() {
+static void init_spiffs() {
     ESP_LOGI(TAG, "Initializing SPIFFS");
 
     esp_vfs_spiffs_conf_t spiffs_conf = {};
@@ -302,7 +302,7 @@ void init_spiffs() {
     }
 }
 
-void init_uart() {
+static void init_uart() {
     uart_config_t uart_config = {};
     uart_config.baud_rate = 9600;
     uart_config.data_bits = UART_DATA_8_BITS;
@@ -324,7 +324,7 @@ void init_uart() {
     ESP_ERROR_CHECK(uart_set_pin(UART_NUM_2, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 }
 
-void my_task(void *pvParameter) {
+static void my_task(void *pvParameter) {
 
     init_spiffs();
 
