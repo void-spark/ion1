@@ -24,10 +24,17 @@ static const char *TAG = "app";
 #define BUTTON_EXT (GPIO_NUM_4)
 #define LED_BUILTIN (GPIO_NUM_2)
 
-static const int BUTTON_SHORT_PRESS_BIT = BIT0;
-static const int BUTTON_LONG_PRESS_BIT = BIT1;
-static const int CHECK_BUTTON_BIT = BIT2;
-static const int DISPLAY_UPDATE_BIT = BIT3;
+// The amount of button updates (100ms) each for a long press
+#define LONG_PRESS_UPDATES 50
+
+static const int BUTTON_MODE_SHORT_PRESS_BIT = BIT0;
+static const int BUTTON_MODE_LONG_PRESS_BIT = BIT1;
+static const int BUTTON_LIGHT_SHORT_PRESS_BIT = BIT2;
+static const int BUTTON_LIGHT_LONG_PRESS_BIT = BIT3;
+static const int CHECK_BUTTON_BIT = BIT4;
+static const int DISPLAY_UPDATE_BIT = BIT5;
+static const int IGNORE_HELD_BIT = BIT6;
+
 
 static EventGroupHandle_t controlEventGroup;
 
@@ -46,6 +53,9 @@ static uint16_t speed;
 
 // Trip in 10m increments
 static uint32_t trip;
+
+// Light on/off
+static bool lightOn = true;
 
 static QueueHandle_t blinkQueue;
 
@@ -99,28 +109,34 @@ static uint32_t digits(uint32_t value, size_t digits, size_t atleast) {
     return result;
 }
 
-static bool handleMotorMessage() {
-    messageType message;
-    do {
-        message = readMessage();
-    } while(message.wakeup || message.target != 0x02);
+void exchange(uint8_t *cmd, size_t cmdLen) {
+    messageType response = {};
+    readResult result = exchange(cmd, cmdLen, &response);
+}
 
-    if(message.data[0] == 0x10 && message.data[1] == 0x20) { // Handoff back to battery
+static bool handleMotorMessage() {
+    messageType message = {};
+    readResult result;
+    do {
+        result = readMessage(&message);
+    } while(result != MSG_OK || message.target != 0x2);
+
+    if(message.type == 0x0) { // Handoff back to battery
         // ESP_LOGI(TAG, "|HNDF");
         return true; // Control back to us
-    } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x01 && message.data[3] == 0x12) {
+    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 1 && message.command == 0x12) {
         // MYSTERY BATTERY COMMAND 12
         // ESP_LOGI(TAG, "|BT:12");
         uint8_t cmd[] = {0x02, 0x20, 0x12};
         writeMessage(cmd, sizeof(cmd));
         return false;
-    } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x00 && message.data[3] == 0x11) {
+    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 0 && message.command== 0x11) {
         // MYSTERY BATTERY COMMAND 11
         // ESP_LOGI(TAG, "|BT:11");
         uint8_t cmd[] = {0x02, 0x20, 0x11};
         writeMessage(cmd, sizeof(cmd));
         return false;
-    } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x04 && message.data[3] == 0x08 && message.data[5] == 0x38 && message.data[7] == 0x3a) {
+    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 4 && message.command== 0x08 && message.payload[1] == 0x38 && message.payload[3] == 0x3a) {
         // GET DATA 9438283a
         // ESP_LOGI(TAG, "|GET-38-3a");
         uint8_t cmd[] = {0x02, 0x2b, 0x08, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // Data (last 10 bytes) to be replaced
@@ -136,25 +152,26 @@ static bool handleMotorMessage() {
             fclose(fp);
         } else {
             // Backup data
+            // Gold small test: 94 38 4b 13 28 3a 3e 98 ed f3
             uint8_t data[] = {0x94, 0x38, 0x4b, 0x15, 0x28, 0x3a, 0x3e, 0x91, 0x79, 0x50}; // This needs to be good calibration data!
             memcpy(cmd + 4, data, 10);
         }
 
         writeMessage(cmd, sizeof(cmd));
         return false;
-    } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x0a && message.data[3] == 0x09 && message.data[5] == 0xc0 && message.data[9] == 0xc1) {
+    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 10 && message.command == 0x09 && message.payload[1] == 0xc0 && message.payload[5] == 0xc1) {
         // PUT DATA c0/c1
         // ESP_LOGI(TAG, "|PUT-c0-c1");
 
-        speed = toUint16(message.data, 6);
-        trip = toUint32(message.data, 10);
+        speed = toUint16(message.payload, 2);
+        trip = toUint32(message.payload, 6);
 
         uint8_t cmd[] = {0x02, 0x21, 0x09, 0x00};
         writeMessage(cmd, sizeof(cmd));
         // Notify display update
         xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT); 
         return false;
-    } else if(message.data[0] == 0x10 && message.data[1] == 0x21 && message.data[2] == 0x0a && message.data[3] == 0x09 && message.data[5] == 0x38 && message.data[9] == 0x3a) {
+    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 10 && message.command == 0x09 && message.payload[1] == 0x38 && message.payload[5] == 0x3a) {
         // PUT DATA 38/3a
         // ESP_LOGI(TAG, "|PUT-38-3a");
 
@@ -163,7 +180,7 @@ static bool handleMotorMessage() {
             ESP_LOGE(TAG, "Failed to open calibration file for writing");
             return false;
         }
-        fwrite(message.data + 4, 1, 10, fp);
+        fwrite(message.payload, 1, 10, fp);
         fclose(fp);
 
         uint8_t cmd[] = {0x02, 0x21, 0x09, 0x00};
@@ -171,8 +188,8 @@ static bool handleMotorMessage() {
         return false;
     }
 
-    ESP_LOGI(TAG, "Unexpected:");
-    ESP_LOG_BUFFER_HEX(TAG, message.data, message.length);
+    ESP_LOGI(TAG, "Unexpected: Tgt:%d, Src:%d, Type:%d, Command:%d", message.target, message.source, message.type, message.command);
+    ESP_LOG_BUFFER_HEX(TAG, message.payload, message.payloadSize);
 
     return false;
 }
@@ -205,9 +222,21 @@ static void init_spiffs() {
     } else {
         ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
     }
+    
+    struct stat st;
+    if(stat(CALIBRATION_FILE, &st) == 0) {
+        FILE *fp = fopen(CALIBRATION_FILE, "r");
+        if(fp == NULL) {
+            ESP_LOGE(TAG, "Failed to open calibration file for reading");
+        } else {
+            uint8_t data[10];
+            size_t read = fread(data, 1, sizeof(data), fp);
+            fclose(fp);
+            ESP_LOGI(TAG, "Calibration file found. Size: %lu, content:", st.st_size);        
+            ESP_LOG_BUFFER_HEX(TAG, data, read);
+        }
+    }
 }
-
-
 
 static void buttonCheckTimerCallback(TimerHandle_t xTimer) { 
     xEventGroupSetBits(controlEventGroup, CHECK_BUTTON_BIT); 
@@ -216,10 +245,62 @@ static void buttonCheckTimerCallback(TimerHandle_t xTimer) {
 static void buttonCheck() {
     static uint8_t count = 1;
 
+    static uint32_t heldMode = 0;
+    static uint32_t heldLight = 0;
+
+    static bool ignoreFirst = false;
+
+    EventBits_t bits = xEventGroupWaitBits(controlEventGroup, IGNORE_HELD_BIT, true, false, 0);
+    if((bits & IGNORE_HELD_BIT) != 0) {
+        ignoreFirst = true;
+    }
+
     // Button check command, should run every 100ms.
     // Reply indicates if/which button is pressed.
     uint8_t cmd[] = {0xc1, 0x21, 0x22, count};
-    exchange(cmd, sizeof(cmd));
+
+    messageType response = {};
+    readResult result = exchange(cmd, sizeof(cmd), &response);
+
+    // The first is '00','01','02' or '03', depending on whether the top, bottom, or both buttons are presse
+
+    bool pressMode = (response.payload[0] & BIT1) != 0;
+    bool pressLight = (response.payload[0] & BIT0) != 0;
+
+    if(pressMode) {
+        heldMode++;
+    }
+    if(pressLight) {
+        heldLight++;
+    }
+
+    if(heldMode == LONG_PRESS_UPDATES) {
+        xEventGroupSetBits(controlEventGroup, BUTTON_MODE_LONG_PRESS_BIT);
+    }
+
+    if(heldLight == LONG_PRESS_UPDATES) {
+        xEventGroupSetBits(controlEventGroup, BUTTON_LIGHT_LONG_PRESS_BIT);
+    }
+
+    if(heldMode > 0 && !pressMode) {
+        if(ignoreFirst) {
+            ignoreFirst = false;
+        } else if(heldMode < LONG_PRESS_UPDATES) {
+            xEventGroupSetBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT);
+        }
+        heldMode = 0;
+    }
+
+    if(heldLight > 0 && !pressLight) {
+        if(ignoreFirst) {
+            ignoreFirst = false;
+        } else if(heldLight < LONG_PRESS_UPDATES) {
+            lightOn = !lightOn;
+            xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT); 
+            xEventGroupSetBits(controlEventGroup, BUTTON_LIGHT_SHORT_PRESS_BIT);
+        }
+        heldLight = 0;
+    }
 
     count += 1;
     count %= 0x10;
@@ -257,13 +338,14 @@ static void displayUpdate(bool setDefault,
     uint8_t numBottom3 = (uint8_t)(bottomVal >> 0);
 
     uint8_t cmd[] = {0xc1, 0x29, (uint8_t)(setDefault ? 0x27 : 0x26), assist, segments1, segments2, battery, numTop1, numTop2, numBottom1, numBottom2, numBottom3};
+
     exchange(cmd, sizeof(cmd));
 }
 
 void showState() {
     uint16_t numTop = digits(speed, 3, 2);
     uint32_t numBottom = digits(trip / 100, 5, 1);
-    displayUpdate(false, (assist_level)level, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, false, 50, numTop, numBottom);
+    displayUpdate(false, (assist_level)level, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, lightOn ? BLNK_SOLID : BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, false, 50, numTop, numBottom);
 }
 
 // TODO
@@ -293,25 +375,14 @@ static void my_task(void *pvParameter) {
 
     while(true) {
 
-
-
+        // TODO:
+        // LONG PRESS lingers if not consumed (and short press too?)
+        // Decide exactly what to do with [00], only expect them when display is not being polled
 
         // TODO:
         // Instead .. ? can we wait on event bits AND rx?
         // Serial should lead, buttons are uncommon.
         // Can we generate a eventgroup bit from uart?
-        // size_t rxReady = 0;
-        // ESP_ERROR_CHECK(uart_get_buffered_data_len(UART_NUM_2, &rxReady));
-        // if(rxReady > 0) {
-        //     uint8_t *data = (uint8_t *)malloc(rxReady);
-        //     const int rxBytes = uart_read_bytes(UART_NUM_2, data, rxReady, 0);
-        //     for(int bufferPos = 0; bufferPos < rxBytes; bufferPos++) {
-        //         uint8_t byteRead = data[bufferPos];
-        //         ESP_LOGI(TAG, "R:%02x", byteRead);
-        //     }
-        //     free(data);
-        // }
-
 
         EventBits_t bits = xEventGroupWaitBits(controlEventGroup, CHECK_BUTTON_BIT | DISPLAY_UPDATE_BIT, false, false, 0);
         if((bits & CHECK_BUTTON_BIT) != 0) {
@@ -321,25 +392,25 @@ static void my_task(void *pvParameter) {
             xEventGroupClearBits(controlEventGroup, DISPLAY_UPDATE_BIT);
             showState();
         } else if(state == IDLE) {
-            EventBits_t bits = xEventGroupWaitBits(controlEventGroup, BUTTON_SHORT_PRESS_BIT | BUTTON_LONG_PRESS_BIT, true, false, 0);
-            if((bits & BUTTON_LONG_PRESS_BIT) != 0) {
+            EventBits_t bits = xEventGroupWaitBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT | BUTTON_MODE_LONG_PRESS_BIT, true, false, 0);
+            if((bits & BUTTON_MODE_LONG_PRESS_BIT) != 0) {
                 queueBlink(10, 100, 100);
                 state = START_CALIBRATE;
-            } else if((bits & BUTTON_SHORT_PRESS_BIT) != 0) {
+            } else if((bits & BUTTON_MODE_SHORT_PRESS_BIT) != 0) {
                 queueBlink(1, 800, 200);
                 state = TURN_MOTOR_ON;
                 step = 0;
             } else {
-                messageType message = readMessage(50 / portTICK_PERIOD_MS );
-                if(!message.timeout) {
-                    if(message.wakeup) {
-                        ESP_LOGI(TAG, "Wakeup!");
-                        state = TURN_MOTOR_ON;
-                        step = 0;
-                    } else {
-                        ESP_LOGI(TAG, "Incoming:");
-                        ESP_LOG_BUFFER_HEX(TAG, message.data, message.length);
-                    }
+                messageType message = {};
+                readResult result = readMessage(&message, 50 / portTICK_PERIOD_MS );
+                if(result == MSG_WAKEUP) {
+                    ESP_LOGI(TAG, "Wakeup!");
+                    xEventGroupSetBits(controlEventGroup, IGNORE_HELD_BIT); 
+                    state = TURN_MOTOR_ON;
+                    step = 0;
+                } else if(result == MSG_OK){
+                    ESP_LOGI(TAG, "Incoming: Tgt:%d, Src:%d, Type:%d, Command:%d", message.target, message.source, message.type, message.command);
+                    ESP_LOG_BUFFER_HEX(TAG, message.payload, message.payloadSize);
                 }
             }
         } else if(state == START_CALIBRATE) {
@@ -360,11 +431,12 @@ static void my_task(void *pvParameter) {
                 // Button check command with a special value, maybe just resets
                 // default/display? Or sets timeout? Or initializes display 'clock'?
                 uint8_t cmd[] = {0xc1, 0x21, 0x22, 0x80};
-                exchange(cmd, sizeof(cmd), 225 / portTICK_PERIOD_MS );
+
+                messageType message = {};
+                readResult result = exchange(cmd, sizeof(cmd), &message, 225 / portTICK_PERIOD_MS );
                 step++;
             } else if(step == 1) {
                 // Update display
-// >> TODO!!! after this every second (In response to motor put data c0/c1 command!), and on state change (OFF>ECO etc.)
                 displayUpdate(false, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, true, 25, 0xccc, 0xccccc);
                 step++;
             } else if(step == 2) {
@@ -397,8 +469,8 @@ static void my_task(void *pvParameter) {
                 step = 0;
             }
         } else if(state == MOTOR_ON) {
-            EventBits_t bits = xEventGroupWaitBits(controlEventGroup, BUTTON_SHORT_PRESS_BIT, true, false, 0);
-            if((bits & BUTTON_SHORT_PRESS_BIT) != 0) {
+            EventBits_t bits = xEventGroupWaitBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT, true, false, 0);
+            if((bits & BUTTON_MODE_SHORT_PRESS_BIT) != 0) {
                 if(level <= 0x02) {
                     queueBlink(level + 1, 250, 200);
                     level++;
@@ -454,8 +526,8 @@ static void my_task(void *pvParameter) {
             // TODO: Do we want this, which still does handoff messages, or do we want
             // to stop listening to motor? Normally motor is powered off and we keep
             // sending handoffs for a while..
-            EventBits_t bits = xEventGroupWaitBits(controlEventGroup, BUTTON_SHORT_PRESS_BIT, false, true, 0);
-            if((bits & BUTTON_SHORT_PRESS_BIT) != 0) {
+            EventBits_t bits = xEventGroupWaitBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT, false, true, 0);
+            if((bits & BUTTON_MODE_SHORT_PRESS_BIT) != 0) {
                 state = IDLE;
             } else {
                 handoff();
@@ -504,10 +576,10 @@ extern "C" void app_main() {
         if(xQueueReceive(button_events, &ev, 1000 / portTICK_PERIOD_MS)) {
             if((ev.pin == BUTTON || ev.pin == BUTTON_EXT) && (ev.event == BUTTON_UP)) {
                 held = false;
-                xEventGroupSetBits(controlEventGroup, BUTTON_SHORT_PRESS_BIT);
+                xEventGroupSetBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT);
             }
             if(!held && (ev.pin == BUTTON || ev.pin == BUTTON_EXT) && (ev.event == BUTTON_HELD)) {
-                xEventGroupSetBits(controlEventGroup, BUTTON_LONG_PRESS_BIT);
+                xEventGroupSetBits(controlEventGroup, BUTTON_MODE_LONG_PRESS_BIT);
                 held = true;
             }
         }

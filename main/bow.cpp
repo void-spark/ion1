@@ -15,6 +15,26 @@ static const char *TAG = "bow";
 
 #define RX_BUF_SIZE (1024)
 
+struct parserState {
+    // Are we holding the last byte to check if it's escaped.
+    bool escaping;
+
+    // We found a unescaped 0x10, indicating start of message.
+    bool started;
+
+    // Payload length is indicated by one nibble, so max value 0xF (15).
+    // Payload length excludes the starting byte, 2 header bytes, command byte, and crc byte.
+    // So total length = payload + 5, and max length is 15 + 5 = 20.
+    uint8_t data[20];
+    uint8_t length; // readPos?
+
+    // Header values.
+    uint8_t target;
+    uint8_t source;
+    int8_t type;
+    int8_t size;
+};
+
 void initUart() {
     uart_config_t uart_config = {};
     uart_config.baud_rate = 9600;
@@ -37,17 +57,106 @@ void initUart() {
     ESP_ERROR_CHECK(uart_set_pin(UART_NUM_2, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 }
 
-messageType readMessage(TickType_t timeout) {
+/**
+ * @brief Parse a single message input byte.
+ *
+ * @param value the byte
+ * @param message the current message state
+ */
+readResult parseByte(uint8_t value, parserState *state) {
+    uint8_t low = value & 0x0f;
+    uint8_t high = value >> 4;
 
-    uint8_t *data = (uint8_t *)malloc(RX_BUF_SIZE);
+    if(state->length == 0) {
+        // First byte in a new message, always 0x10.
+        // We could check it, but that's already handled by the caller.
+        // We still need it, to calculate the crc.
+    } else if(state->length == 1) {
+        // First nibble is always message target.
+        state->target = high;
+        // Second nibble is always message type.
+        state->type = low;
+    } else if(state->length == 2) {
+        if(state->type == 0x00) {
+            state->size = 3;
+        } else {
+            state->source = high;
+            if(state->type == 0x03 || state->type == 0x04) {
+                state->size = 4;
+            } else {
+                state->size = low + 5;
+            }
+        }
+    }
 
-    bool escaping = false;
+    state->data[state->length++] = value;
 
-    messageType message = {};
-    message.target = -1;
-    message.source = -1;
-    message.type = -1;
-    message.size = -1;
+    if(state->length > 2 && state->length == state->size) {
+        uint8_t crc = crc8_bow(state->data, state->length - 1);
+        if(crc != state->data[state->length - 1]) {
+            ESP_LOGI(TAG, "CRC error, message:");
+            ESP_LOG_BUFFER_HEX(TAG, state->data, state->length);
+            return MSG_CRC_ERROR;
+        }
+        return MSG_OK;
+    }
+
+    return MSG_CONTINUE;
+}
+
+readResult handleByte(uint8_t value, parserState *state) {
+    if(state->started) {
+        // Not a message start byte, and we're not escaping, so just parse it normally.
+        return parseByte(value, state);
+    } else if(value == 0x00) {
+        // Single 0x00 with no leading 0x10, which is sent by display to wake up system.
+        return MSG_WAKEUP;
+    } else {
+        // Unexpected bytes, continue till we find a 0x10 or 0x00
+        return MSG_CONTINUE;
+    }
+}
+
+/**
+ * Deals with message framing, (re)starts a message on a unescaped 0x10,
+ * and converts escaped 0x10s to single 0x10s
+ */
+readResult handleFraming(uint8_t value, parserState *state) {
+    if(state->escaping) {
+        state->escaping = false;
+        if(value == 0x10) {
+            // Escaped 0x10, don't reset and just parse the value.
+            return handleByte(0x10, state);
+        }
+
+        // Non escaped 0x10, start of message.
+        if(state->length != 0) {
+            // We already were reading a message which we didn't get fully.
+            // Ignore it and reset state.
+            if(state->length > 0) {
+                ESP_LOGI(TAG, "Incomplete message:");
+                ESP_LOG_BUFFER_HEX(TAG, state->data, state->length);
+            }
+            *state = {};
+        }
+
+        state->started = true;
+        // Record the start byte, no need to check result since it's always MSG_CONTINUE.
+        handleByte(0x10, state);
+        // First content byte of the message.
+        return handleByte(value, state);
+    } else if(value == 0x10) {
+        state->escaping = true;
+        // Message start byte, we need to check the next input byte to decide what to do.
+        return MSG_CONTINUE;
+    } else {
+        return handleByte(value, state);
+    }
+}
+
+readResult readMessage(messageType *message, TickType_t timeout) {
+    uint8_t data[RX_BUF_SIZE];
+    parserState state = {};
 
     while(true) {
         size_t rxReady = 0;
@@ -59,100 +168,29 @@ messageType readMessage(TickType_t timeout) {
 
         const int rxBytes = uart_read_bytes(UART_NUM_2, data, rxReady, timeout > 0 ? timeout : 1000 / portTICK_PERIOD_MS);
         if(timeout > 0 && rxBytes == 0) {
-            message.timeout = true;
-            free(data);
-            return message;
+            return MSG_TIMEOUT;
         }
 
-        for(int bufferPos = 0; bufferPos < rxBytes; bufferPos++) {
-
-            uint8_t byteRead = data[bufferPos];
-            ESP_LOGD(TAG, "R:%02x", byteRead);
-
-            uint8_t input[2] = {};
-            uint8_t inputLen = 0;
-
-            if(escaping) {
-                input[0] = 0x10;
-                inputLen += 1;
-                if(byteRead != 0x10) {
-                    input[1] = byteRead;
-                    inputLen += 1;
-                    if(message.length != 0) {
-                        // Unescaped 0x10, reset
-                        if(inputLen > 0) {
-                            ESP_LOGI(TAG, "Incomplete:");
-                            ESP_LOG_BUFFER_HEX(TAG, message.data, message.length);
-                        }
-                        message.length = 0;
-                        message.target = -1;
-                        message.source = -1;
-                        message.type = -1;
-                        message.size = -1;
+        for(size_t bufferPos = 0; bufferPos < rxBytes; bufferPos++) {
+            readResult result = handleFraming(data[bufferPos], &state);
+            if(result != MSG_CONTINUE) {
+                if(result == MSG_OK) {
+                    message->target = state.target;
+                    message->source = state.source;
+                    message->type = state.type;
+                    if(state.size >= 5) {
+                        message->command = state.data[3];
+                        memcpy(message->payload, state.data + 4, state.size - 5);
+                        message->payloadSize = state.size - 5;
                     }
                 }
-                escaping = false;
-            } else if(byteRead == 0x10) {
-                escaping = true;
-                // Message start byte, we need to check the next input byte to decide what to do.
-                continue;
-            } else {
-                // Not a message start byte, and we're not escaping, so just parse it normally.
-                input[0] = byteRead;
-                inputLen += 1;
-            }
-
-            for(int pos = 0; pos < inputLen; pos++) {
-                uint8_t value = input[pos];
-                uint8_t low = value & 0x0f;
-                uint8_t high = value >> 4;
-
-                if(message.length == 0) {
-                    // First byte in a new message
-                    if(value == 0x00) {
-                        // Single '00' with no leading '10', which is sent by display to wake up system.
-                        message.wakeup = true;
-                        free(data);
-                        return message;
-                    }
-                } else if(message.length == 1) {
-                    // First nibble is always message target.
-                    message.target = high;
-                    // Second nibble is always message type.
-                    message.type = low;
-                } else if(message.length == 2) {
-                    if(message.type == 0x00) {
-                        message.size = 3;
-                    } else {
-                        message.source = high;
-                        if(message.type == 0x03 || message.type == 0x04) {
-                            message.size = 4;
-                        } else {
-                            message.size = low + 5;
-                        }
-                    }
-                }
-                message.data[message.length++] = value;
-
-                if(message.length > 2 && message.length == message.size) {
-                    free(data);
-
-                    // ESP_LOGI(TAG, "Tgt:%d, Src:%d, Type:%d, Size:%d", message.target, message.source, message.type, message.size);
-
-                    // uint8_t crc = crc8_bow( message.data, message.length - 1);
-
-                    // ESP_LOGI(TAG, "CRC(calc): %02x", crc);
-
-                    return message;
-                }
+                return result;
             }
         }
     }
 }
 
-messageType readMessage() {
-    return readMessage(0);
-}
+readResult readMessage(messageType *message) { return readMessage(message, 0); }
 
 void writeMessage(uint8_t *message, uint8_t messageLen) {
 
@@ -175,26 +213,26 @@ void writeMessage(uint8_t *message, uint8_t messageLen) {
     uart_write_bytes(UART_NUM_2, escaped, outPos);
 }
 
-messageType exchange(uint8_t *cmd, size_t cmdLen, const TickType_t timeout) {
-    messageType message;
-
+// TODO: also use message as input
+readResult exchange(uint8_t *cmd, size_t cmdLen, messageType *inMessage, const TickType_t timeout) {
     writeMessage(cmd, cmdLen);
+    readResult result;
     while(true) {
-        message = readMessage(timeout);
-        if(message.timeout) {
+        result = readMessage(inMessage, timeout);
+        if(result == MSG_TIMEOUT) {
+            // Retry
             writeMessage(cmd, cmdLen);
-        } else if(!message.wakeup && message.target == 0x02) {
+        } else if(result == MSG_OK && inMessage->target == 0x02) {
+            // We got our response
             break;
         }
     }
 
-    if(message.data[3] != cmd[2]) { // Watch out, cmd doesn't include the leading 0x10
-        ESP_LOGE(TAG, "Wrong reply cmd, expected %02x, got %02x", cmd[2], message.data[3]);
+    if(inMessage->command != cmd[2]) {
+        ESP_LOGE(TAG, "Wrong reply cmd, expected %02x, got %02x", cmd[2], inMessage->command);
     }
 
-    return message;
+    return result;
 }
 
-messageType exchange(uint8_t *cmd, size_t cmdLen) {
-    return exchange(cmd, cmdLen, 0);
-}
+readResult exchange(uint8_t *cmd, size_t cmdLen, messageType *inMessage) { return exchange(cmd, cmdLen, inMessage, 0); }
