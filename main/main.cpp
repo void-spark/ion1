@@ -55,7 +55,7 @@ static uint16_t speed;
 static uint32_t trip;
 
 // Light on/off
-static bool lightOn = true;
+static bool lightOn = false;
 
 static QueueHandle_t blinkQueue;
 
@@ -461,7 +461,7 @@ static void my_task(void *pvParameter) {
                 step = 0;
             }
         } else if(state == MOTOR_ON) {
-            if(level == 0x00 && lightOn == false && modeLongPress) {
+            if(level == 0x00 && lightOn == false && lightLongPress) {
                 queueBlink(10, 100, 100);
                 state = START_CALIBRATE;
             } else if(modeShortPress) {
@@ -586,7 +586,7 @@ extern "C" void app_main() {
                 xEventGroupSetBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT);
             }
             if(!held && (ev.pin == BUTTON || ev.pin == BUTTON_EXT) && (ev.event == BUTTON_HELD)) {
-                xEventGroupSetBits(controlEventGroup, BUTTON_MODE_LONG_PRESS_BIT);
+                xEventGroupSetBits(controlEventGroup, BUTTON_LIGHT_LONG_PRESS_BIT);
                 held = true;
             }
         }
