@@ -295,8 +295,6 @@ static void buttonCheck() {
         if(ignoreFirst) {
             ignoreFirst = false;
         } else if(heldLight < LONG_PRESS_UPDATES) {
-            lightOn = !lightOn;
-            xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT); 
             xEventGroupSetBits(controlEventGroup, BUTTON_LIGHT_SHORT_PRESS_BIT);
         }
         heldLight = 0;
@@ -376,13 +374,24 @@ static void my_task(void *pvParameter) {
     while(true) {
 
         // TODO:
-        // LONG PRESS lingers if not consumed (and short press too?)
-        // Decide exactly what to do with [00], only expect them when display is not being polled
+        // Use 'step' for calibrate, double check logic of all states.
+        // How do we go back to IDLE state? (timeout when level = 0?)
 
         // TODO:
         // Instead .. ? can we wait on event bits AND rx?
         // Serial should lead, buttons are uncommon.
         // Can we generate a eventgroup bit from uart?
+
+        EventBits_t buttonBits = xEventGroupWaitBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT | BUTTON_MODE_LONG_PRESS_BIT | BUTTON_LIGHT_SHORT_PRESS_BIT | BUTTON_LIGHT_LONG_PRESS_BIT, true, false, 0);
+        const bool modeShortPress = (buttonBits & BUTTON_MODE_SHORT_PRESS_BIT) != 0;
+        const bool modeLongPress = (buttonBits & BUTTON_MODE_LONG_PRESS_BIT) != 0;
+        const bool lightShortPress = (buttonBits & BUTTON_LIGHT_SHORT_PRESS_BIT) != 0;
+        const bool lightLongPress = (buttonBits & BUTTON_LIGHT_LONG_PRESS_BIT) != 0;
+
+        if(lightShortPress) {
+            lightOn = !lightOn;
+            xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT); 
+        }
 
         EventBits_t bits = xEventGroupWaitBits(controlEventGroup, CHECK_BUTTON_BIT | DISPLAY_UPDATE_BIT, false, false, 0);
         if((bits & CHECK_BUTTON_BIT) != 0) {
@@ -392,11 +401,7 @@ static void my_task(void *pvParameter) {
             xEventGroupClearBits(controlEventGroup, DISPLAY_UPDATE_BIT);
             showState();
         } else if(state == IDLE) {
-            EventBits_t bits = xEventGroupWaitBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT | BUTTON_MODE_LONG_PRESS_BIT, true, false, 0);
-            if((bits & BUTTON_MODE_LONG_PRESS_BIT) != 0) {
-                queueBlink(10, 100, 100);
-                state = START_CALIBRATE;
-            } else if((bits & BUTTON_MODE_SHORT_PRESS_BIT) != 0) {
+            if(modeShortPress) {
                 queueBlink(1, 800, 200);
                 state = TURN_MOTOR_ON;
                 step = 0;
@@ -413,19 +418,6 @@ static void my_task(void *pvParameter) {
                     ESP_LOG_BUFFER_HEX(TAG, message.payload, message.payloadSize);
                 }
             }
-        } else if(state == START_CALIBRATE) {
-            // Start calibration
-            uint8_t cmdc1[] = {0x01, 0x20, 0x35};
-            exchange(cmdc1, sizeof(cmdc1));
-            handoff();
-
-            // Put data, which is common after calibrate. No idea what it's for.
-            uint8_t cmdc2[] = {0x01, 0x22, 0x08, 0x00, 0xdf};
-            exchange(cmdc2, sizeof(cmdc2));
-            handoff();
-
-            // BMS actually stops listening here, it ignores (some?) motor messages.
-            state = IDLE;
         } else if(state == TURN_MOTOR_ON) {
             if(step == 0) {
                 // Button check command with a special value, maybe just resets
@@ -469,8 +461,10 @@ static void my_task(void *pvParameter) {
                 step = 0;
             }
         } else if(state == MOTOR_ON) {
-            EventBits_t bits = xEventGroupWaitBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT, true, false, 0);
-            if((bits & BUTTON_MODE_SHORT_PRESS_BIT) != 0) {
+            if(level == 0x00 && lightOn == false && modeLongPress) {
+                queueBlink(10, 100, 100);
+                state = START_CALIBRATE;
+            } else if(modeShortPress) {
                 if(level <= 0x02) {
                     queueBlink(level + 1, 250, 200);
                     level++;
@@ -483,6 +477,19 @@ static void my_task(void *pvParameter) {
                     step = 0;
                 }
             }
+        } else if(state == START_CALIBRATE) {
+            // Start calibration
+            uint8_t cmdc1[] = {0x01, 0x20, 0x35};
+            exchange(cmdc1, sizeof(cmdc1));
+            handoff();
+
+            // Put data, which is common after calibrate. No idea what it's for.
+            uint8_t cmdc2[] = {0x01, 0x22, 0x08, 0x00, 0xdf};
+            exchange(cmdc2, sizeof(cmdc2));
+            handoff();
+
+            // BMS actually stops listening here, it ignores (some?) motor messages.
+            state = MOTOR_ON;
         } else if(state == SET_ASSIST_LEVEL) {
             if(!assistOn) {
                 // Assist on
@@ -526,8 +533,8 @@ static void my_task(void *pvParameter) {
             // TODO: Do we want this, which still does handoff messages, or do we want
             // to stop listening to motor? Normally motor is powered off and we keep
             // sending handoffs for a while..
-            EventBits_t bits = xEventGroupWaitBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT, false, true, 0);
-            if((bits & BUTTON_MODE_SHORT_PRESS_BIT) != 0) {
+            if(modeShortPress) {
+                // TODO: Previously I made the short press sticky, so we'd leave IDLE straight away
                 state = IDLE;
             } else {
                 handoff();
