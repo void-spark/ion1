@@ -124,6 +124,12 @@ static bool handleMotorMessage() {
     if(message.type == 0x0) { // Handoff back to battery
         // ESP_LOGI(TAG, "|HNDF");
         return true; // Control back to us
+    } else if(message.type == 0x4 && message.source == 0x0) {
+        // PING
+        // ESP_LOGI(TAG, "|PING");
+        uint8_t cmd[] = {0x03, 0x20};
+        writeMessage(cmd, sizeof(cmd));
+        return false;
     } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 1 && message.command == 0x12) {
         // MYSTERY BATTERY COMMAND 12
         // ESP_LOGI(TAG, "|BT:12");
@@ -134,6 +140,12 @@ static bool handleMotorMessage() {
         // MYSTERY BATTERY COMMAND 11
         // ESP_LOGI(TAG, "|BT:11");
         uint8_t cmd[] = {0x02, 0x20, 0x11};
+        writeMessage(cmd, sizeof(cmd));
+        return false;
+    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 2 && message.command== 0x08 && message.payload[1] == 0x2a) {
+        // GET DATA 002a
+        // ESP_LOGI(TAG, "|GET-2a");
+        uint8_t cmd[] = {0x02, 0x24, 0x08, 0x00, 0x00, 0x2a, 0x01};
         writeMessage(cmd, sizeof(cmd));
         return false;
     } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 4 && message.command== 0x08 && message.payload[1] == 0x38 && message.payload[3] == 0x3a) {
