@@ -1,4 +1,7 @@
 CONFIG_ION_BUTTON=y
+CONFIG_ION_UART=2
+CONFIG_ION_RXD=16
+CONFIG_ION_TXD=17
 
 # My chips are 4MB flash, once you use OTA this settings matters
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y

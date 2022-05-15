@@ -10,8 +10,9 @@
 
 static const char *TAG = "bow";
 
-#define TXD_PIN (GPIO_NUM_17)
-#define RXD_PIN (GPIO_NUM_16)
+#define UART_NUM (CONFIG_ION_UART)
+#define TXD_PIN (CONFIG_ION_TXD)
+#define RXD_PIN (CONFIG_ION_RXD)
 
 #define RX_BUF_SIZE (1024)
 
@@ -51,10 +52,10 @@ void initUart() {
     uart_intr.rx_timeout_thresh = 10;
     uart_intr.txfifo_empty_intr_thresh = 10;
 
-    ESP_ERROR_CHECK(uart_driver_install(UART_NUM_2, RX_BUF_SIZE * 2, 0, 0, NULL, 0));
-    ESP_ERROR_CHECK(uart_param_config(UART_NUM_2, &uart_config));
-    ESP_ERROR_CHECK(uart_intr_config(UART_NUM_2, &uart_intr));
-    ESP_ERROR_CHECK(uart_set_pin(UART_NUM_2, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    ESP_ERROR_CHECK(uart_driver_install(UART_NUM, RX_BUF_SIZE * 2, 0, 0, NULL, 0));
+    ESP_ERROR_CHECK(uart_param_config(UART_NUM, &uart_config));
+    ESP_ERROR_CHECK(uart_intr_config(UART_NUM, &uart_intr));
+    ESP_ERROR_CHECK(uart_set_pin(UART_NUM, TXD_PIN, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
 }
 
 /**
@@ -160,13 +161,13 @@ readResult readMessage(messageType *message, TickType_t timeout) {
 
     while(true) {
         size_t rxReady = 0;
-        ESP_ERROR_CHECK(uart_get_buffered_data_len(UART_NUM_2, &rxReady));
+        ESP_ERROR_CHECK(uart_get_buffered_data_len(UART_NUM, &rxReady));
         if(rxReady == 0) {
             // Always wait for at least one byte, even if there is none available.
             rxReady = 1;
         }
 
-        const int rxBytes = uart_read_bytes(UART_NUM_2, data, rxReady, timeout > 0 ? timeout : 1000 / portTICK_PERIOD_MS);
+        const int rxBytes = uart_read_bytes(UART_NUM, data, rxReady, timeout > 0 ? timeout : 1000 / portTICK_PERIOD_MS);
         if(timeout > 0 && rxBytes == 0) {
             return MSG_TIMEOUT;
         }
@@ -210,7 +211,7 @@ void writeMessage(uint8_t *message, uint8_t messageLen) {
             escaped[outPos++] = 0x10;
         }
     }
-    uart_write_bytes(UART_NUM_2, escaped, outPos);
+    uart_write_bytes(UART_NUM, escaped, outPos);
 }
 
 // TODO: also use message as input

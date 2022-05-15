@@ -1,6 +1,18 @@
 menu "Sparta Ion Config"
     config ION_BUTTON
-    bool "Enable button"
-    default y
+        bool "Enable button"
+        default y
+
+    config ION_UART
+        int "UART number connected to bus"
+        default 2
+
+    config ION_RXD
+        int "Receive pin connected to bus"
+        default 16
+
+    config ION_TXD
+        int "Send pin connected to bus"
+        default 17
 
 endmenu
