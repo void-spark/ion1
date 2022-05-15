@@ -58,6 +58,15 @@ enum control_state { IDLE, START_CALIBRATE, TURN_MOTOR_ON, MOTOR_ON, SET_ASSIST_
 enum assist_level { ASS_OFF = 0, ASS_ECO, ASS_NORMAL, ASS_POWER };
 enum blink_speed { BLNK_OFF = 0, BLNK_FAST, BLNK_SLOW, BLNK_SOLID };
 
+enum handleMotorMessageResult {
+    // We got a handoff back, so we get to send the next message
+    CONTROL_TO_US,
+    // We had to reply to a motor message, so motor is next to send a message.
+    CONTROL_TO_MOTOR,
+    // We did not get a timely reply to a handoff message.
+    HANDOFF_TIMEOUT
+};
+
 // Current assist level
 static uint8_t level = 0x00;
 
@@ -127,40 +136,45 @@ void exchange(uint8_t *cmd, size_t cmdLen) {
     readResult result = exchange(cmd, cmdLen, &response);
 }
 
-static bool handleMotorMessage() {
+static handleMotorMessageResult handleMotorMessage() {
     messageType message = {};
     readResult result;
     do {
-        result = readMessage(&message);
+        // Replies to handoff should be a lot quicker then 250ms
+        result = readMessage(&message, 250 / portTICK_PERIOD_MS);
+        if(result == MSG_TIMEOUT) {
+            // Most likely the motor turned off, after we told it to (XHP, Toprun doesn't seem to stop)
+            return HANDOFF_TIMEOUT;
+        }
     } while(result != MSG_OK || message.target != 0x2);
 
     if(message.type == 0x0) { // Handoff back to battery
         // ESP_LOGI(TAG, "|HNDF");
-        return true; // Control back to us
+        return CONTROL_TO_US;
     } else if(message.type == 0x4 && message.source == 0x0) {
         // PING
         // ESP_LOGI(TAG, "|PING");
         uint8_t cmd[] = {0x03, 0x20};
         writeMessage(cmd, sizeof(cmd));
-        return false;
+        return CONTROL_TO_MOTOR;
     } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 1 && message.command == 0x12) {
         // MYSTERY BATTERY COMMAND 12
         // ESP_LOGI(TAG, "|BT:12");
         uint8_t cmd[] = {0x02, 0x20, 0x12};
         writeMessage(cmd, sizeof(cmd));
-        return false;
+        return CONTROL_TO_MOTOR;
     } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 0 && message.command== 0x11) {
         // MYSTERY BATTERY COMMAND 11
         // ESP_LOGI(TAG, "|BT:11");
         uint8_t cmd[] = {0x02, 0x20, 0x11};
         writeMessage(cmd, sizeof(cmd));
-        return false;
+        return CONTROL_TO_MOTOR;
     } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 2 && message.command== 0x08 && message.payload[1] == 0x2a) {
         // GET DATA 002a
         // ESP_LOGI(TAG, "|GET-2a");
         uint8_t cmd[] = {0x02, 0x24, 0x08, 0x00, 0x00, 0x2a, 0x01};
         writeMessage(cmd, sizeof(cmd));
-        return false;
+        return CONTROL_TO_MOTOR;
     } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 4 && message.command== 0x08 && message.payload[1] == 0x38 && message.payload[3] == 0x3a) {
         // GET DATA 9438283a
         // ESP_LOGI(TAG, "|GET-38-3a");
@@ -171,7 +185,7 @@ static bool handleMotorMessage() {
             FILE *fp = fopen(CALIBRATION_FILE, "r");
             if(fp == NULL) {
                 ESP_LOGE(TAG, "Failed to open calibration file for reading");
-                return false;
+                return CONTROL_TO_MOTOR;
             }
             fread(cmd + 4, 1, 10, fp);
             fclose(fp);
@@ -183,7 +197,7 @@ static bool handleMotorMessage() {
         }
 
         writeMessage(cmd, sizeof(cmd));
-        return false;
+        return CONTROL_TO_MOTOR;
     } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 10 && message.command == 0x09 && message.payload[1] == 0xc0 && message.payload[5] == 0xc1) {
         // PUT DATA c0/c1
         // ESP_LOGI(TAG, "|PUT-c0-c1");
@@ -195,7 +209,7 @@ static bool handleMotorMessage() {
         writeMessage(cmd, sizeof(cmd));
         // Notify display update
         xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT); 
-        return false;
+        return CONTROL_TO_MOTOR;
     } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 10 && message.command == 0x09 && message.payload[1] == 0x38 && message.payload[5] == 0x3a) {
         // PUT DATA 38/3a
         // ESP_LOGI(TAG, "|PUT-38-3a");
@@ -203,30 +217,36 @@ static bool handleMotorMessage() {
         FILE *fp = fopen(CALIBRATION_FILE, "w");
         if(fp == NULL) {
             ESP_LOGE(TAG, "Failed to open calibration file for writing");
-            return false;
+            return CONTROL_TO_MOTOR;
         }
         fwrite(message.payload, 1, 10, fp);
         fclose(fp);
 
         uint8_t cmd[] = {0x02, 0x21, 0x09, 0x00};
         writeMessage(cmd, sizeof(cmd));
-        return false;
+        return CONTROL_TO_MOTOR;
     }
 
     ESP_LOGI(TAG, "Unexpected: Tgt:%d, Src:%d, Type:%d, Command:%d", message.target, message.source, message.type, message.command);
     ESP_LOG_BUFFER_HEX(TAG, message.payload, message.payloadSize);
 
-    return false;
+    return CONTROL_TO_MOTOR;
 }
 
-static void handoff() {
+static bool handoff() {
 
     uint8_t cmd[] = {0x00}; // HANDOFF to motor
     writeMessage(cmd, sizeof(cmd));
 
-    while(!handleMotorMessage()) {
+    while(true) {
+        handleMotorMessageResult result = handleMotorMessage();
+        if(result == CONTROL_TO_US) {
+            return true;
+        }
+        if(result == HANDOFF_TIMEOUT) {
+            return false;
+        }
     }
-    // print('Control returned to us')
 }
 
 static void init_spiffs() {
@@ -553,7 +573,8 @@ static void my_task(void *pvParameter) {
                 // Motor off
                 uint8_t cmd[] = {0x01, 0x21, 0x31, 0x00};
                 exchange(cmd, sizeof(cmd));
-                // TODO: Maybe wait for cmd 11?
+                // NOTE: XHP after this will stop responding to handoff messages after some time (and a put data message)
+                // TODO: Maybe wait for cmd 11? (No cmd 11 from XHP?)
                 state = MOTOR_OFF;
                 step = 0;
             }
@@ -563,14 +584,21 @@ static void my_task(void *pvParameter) {
             // sending handoffs for a while..
             if(modeShortPress) {
                 // TODO: Previously I made the short press sticky, so we'd leave IDLE straight away
-                state = IDLE;
-            } else {
-                handoff();
+                // state = IDLE;
+                // TODO: We're still chatting, so motor is responsive, but need to turn it back on since we did tell it to turn off..
+                // Really still need to come up with a good setup here. Does the actual system even turn off the motor? Probably only after a while in '0' assist state.
+                // And depending on wether we're moving (by motor update km/h messages)?
+                state = TURN_MOTOR_ON;
             }
         }
 
         if(motorHandoffs) {
-            handoff();
+            if(!handoff()) {
+                // Timeout, assume motor turned off.
+                xTimerStop(buttonCheckTimer, 0);
+                motorHandoffs = false;
+                state = IDLE;
+            }
         }
     }
 
