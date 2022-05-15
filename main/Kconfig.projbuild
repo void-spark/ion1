@@ -1,0 +1,6 @@
+menu "Sparta Ion Config"
+    config ION_BUTTON
+    bool "Enable button"
+    default y
+
+endmenu

@@ -30,8 +30,11 @@ static const char *TAG = "app";
 
 #define CALIBRATION_FILE "/spiffs/calibration.bin"
 
-#define BUTTON (GPIO_NUM_0)
-#define BUTTON_EXT (GPIO_NUM_4)
+#if CONFIG_ION_BUTTON
+    #define BUTTON (GPIO_NUM_0)
+    #define BUTTON_EXT (GPIO_NUM_4)
+#endif
+
 #define LED_BUILTIN (GPIO_NUM_2)
 
 // The amount of button updates (100ms) each for a long press
@@ -601,6 +604,7 @@ extern "C" void app_main() {
 
     xTaskCreatePinnedToCore(blinkTask, "blinkTask", 2048, NULL, 5, NULL, FIRST_CPU);
 
+#if CONFIG_ION_BUTTON
     bool held = false;
     button_event_t ev;
     QueueHandle_t button_events = pulled_button_init(BIT64(BUTTON) | BIT64(BUTTON_EXT), GPIO_PULLUP_ONLY);
@@ -616,4 +620,5 @@ extern "C" void app_main() {
             }
         }
     }
+#endif
 }
