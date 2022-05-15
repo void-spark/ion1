@@ -449,7 +449,10 @@ static void my_task(void *pvParameter) {
             } else if(step == 5) {
                 // Motor on
                 uint8_t cmd[] = {0x01, 0x20, 0x30};
-                exchange(cmd, sizeof(cmd));
+
+                messageType message = {};
+                // Original BMS seems to repeat handoff till the motor responds, with 41ms between commands, but this should also work.
+                exchange(cmd, sizeof(cmd), &message, 41 / portTICK_PERIOD_MS);
                 motorHandoffs = true;
                 step++;
             } else if(step == 6) {
