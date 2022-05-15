@@ -4,6 +4,7 @@
 #include <sys/unistd.h>
 #include <sys/stat.h>
 #include "sdkconfig.h"
+#include "soc/soc_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -17,6 +18,15 @@
 #include "bow.h"
 
 static const char *TAG = "app";
+
+
+#define FIRST_CPU PRO_CPU_NUM
+
+#if SOC_CPU_CORES_NUM > 1
+    #define SECOND_CPU APP_CPU_NUM
+#else
+    #define SECOND_CPU PRO_CPU_NUM
+#endif
 
 #define CALIBRATION_FILE "/spiffs/calibration.bin"
 
@@ -576,7 +586,7 @@ extern "C" void app_main() {
 
     controlEventGroup = xEventGroupCreate();
 
-    xTaskCreatePinnedToCore(my_task, "my_task", 4096, NULL, 5, NULL, APP_CPU_NUM);
+    xTaskCreatePinnedToCore(my_task, "my_task", 4096, NULL, 5, NULL, SECOND_CPU);
 
     // TODO: TO TASK
     gpio_config_t io_conf = {};
@@ -589,7 +599,7 @@ extern "C" void app_main() {
 
     blinkQueue = xQueueCreate(3, sizeof(blinkType));
 
-    xTaskCreatePinnedToCore(blinkTask, "blinkTask", 2048, NULL, 5, NULL, PRO_CPU_NUM);
+    xTaskCreatePinnedToCore(blinkTask, "blinkTask", 2048, NULL, 5, NULL, FIRST_CPU);
 
     bool held = false;
     button_event_t ev;
