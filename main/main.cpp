@@ -38,9 +38,6 @@ static const char *TAG = "app";
 
 #define LED_BUILTIN (GPIO_NUM_2)
 
-// The amount of button updates (100ms) each for a long press
-#define LONG_PRESS_UPDATES 50
-
 static const int BUTTON_MODE_SHORT_PRESS_BIT = BIT0;
 static const int BUTTON_MODE_LONG_PRESS_BIT = BIT1;
 static const int BUTTON_LIGHT_SHORT_PRESS_BIT = BIT2;
@@ -51,8 +48,6 @@ static const int IGNORE_HELD_BIT = BIT6;
 
 
 static EventGroupHandle_t controlEventGroup;
-
-static TimerHandle_t buttonCheckTimer;
 
 enum control_state { IDLE, START_CALIBRATE, TURN_MOTOR_ON, MOTOR_ON, SET_ASSIST_LEVEL, TURN_MOTOR_OFF, MOTOR_OFF };
 
@@ -265,73 +260,6 @@ static void init_spiffs() {
     }
 }
 
-static void buttonCheckTimerCallback(TimerHandle_t xTimer) { 
-    xEventGroupSetBits(controlEventGroup, CHECK_BUTTON_BIT); 
-}
-
-static void buttonCheck() {
-    static uint8_t count = 1;
-
-    static uint32_t heldMode = 0;
-    static uint32_t heldLight = 0;
-
-    static bool ignoreFirst = false;
-
-    EventBits_t bits = xEventGroupWaitBits(controlEventGroup, IGNORE_HELD_BIT, true, false, 0);
-    if((bits & IGNORE_HELD_BIT) != 0) {
-        ignoreFirst = true;
-    }
-
-    // Button check command, should run every 100ms.
-    // Reply indicates if/which button is pressed.
-    uint8_t cmd[] = {0xc1, 0x21, 0x22, count};
-
-    messageType response = {};
-    readResult result = exchange(cmd, sizeof(cmd), &response);
-
-    // The first is '00','01','02' or '03', depending on whether the top, bottom, or both buttons are presse
-
-    bool pressMode = (response.payload[0] & BIT1) != 0;
-    bool pressLight = (response.payload[0] & BIT0) != 0;
-
-    if(pressMode) {
-        heldMode++;
-    }
-    if(pressLight) {
-        heldLight++;
-    }
-
-    if(heldMode == LONG_PRESS_UPDATES) {
-        xEventGroupSetBits(controlEventGroup, BUTTON_MODE_LONG_PRESS_BIT);
-    }
-
-    if(heldLight == LONG_PRESS_UPDATES) {
-        xEventGroupSetBits(controlEventGroup, BUTTON_LIGHT_LONG_PRESS_BIT);
-    }
-
-    if(heldMode > 0 && !pressMode) {
-        if(ignoreFirst) {
-            ignoreFirst = false;
-        } else if(heldMode < LONG_PRESS_UPDATES) {
-            xEventGroupSetBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT);
-        }
-        heldMode = 0;
-    }
-
-    if(heldLight > 0 && !pressLight) {
-        if(ignoreFirst) {
-            ignoreFirst = false;
-        } else if(heldLight < LONG_PRESS_UPDATES) {
-            xEventGroupSetBits(controlEventGroup, BUTTON_LIGHT_SHORT_PRESS_BIT);
-        }
-        heldLight = 0;
-    }
-
-    count += 1;
-    count %= 0x10;
-}
-
-
 // TODO
 static void readTask(void *pvParameter) {
     // To RTOS stream
@@ -348,7 +276,14 @@ static void my_task(void *pvParameter) {
 
     initUart();
 
-    buttonCheckTimer = xTimerCreate("buttonCheckTimer", (100 / portTICK_PERIOD_MS), pdTRUE, (void *)0, buttonCheckTimerCallback);
+    initCu2(controlEventGroup, 
+            BUTTON_MODE_SHORT_PRESS_BIT, 
+            BUTTON_MODE_LONG_PRESS_BIT, 
+            BUTTON_LIGHT_SHORT_PRESS_BIT, 
+            BUTTON_LIGHT_LONG_PRESS_BIT, 
+            CHECK_BUTTON_BIT,
+            IGNORE_HELD_BIT
+    );
 
     // The state we're in
     control_state state = IDLE;
@@ -426,7 +361,7 @@ static void my_task(void *pvParameter) {
             } else if(step == 3) {
                 // First normal button check command, after this should run every 100ms.
                 buttonCheck();
-                xTimerStart(buttonCheckTimer, 0);
+                startButtonCheck();
                 step++;
             } else if(step == 4) {
                 // Set default display, which is shown if the display isn't updated for a bit (?)
@@ -536,7 +471,7 @@ static void my_task(void *pvParameter) {
         if(motorHandoffs) {
             if(!handoff()) {
                 // Timeout, assume motor turned off.
-                xTimerStop(buttonCheckTimer, 0);
+                stopButtonCheck();
                 motorHandoffs = false;
                 state = IDLE;
             }
