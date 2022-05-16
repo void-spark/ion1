@@ -38,3 +38,4 @@ readResult readMessage(messageType *message);
 void writeMessage(uint8_t *message, uint8_t messageLen);
 readResult exchange(uint8_t *cmd, size_t cmdLen, messageType *inMessage, const TickType_t timeout);
 readResult exchange(uint8_t *cmd, size_t cmdLen, messageType *inMessage);
+void exchange(uint8_t *cmd, size_t cmdLen);

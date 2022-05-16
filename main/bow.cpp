@@ -236,4 +236,11 @@ readResult exchange(uint8_t *cmd, size_t cmdLen, messageType *inMessage, const T
     return result;
 }
 
-readResult exchange(uint8_t *cmd, size_t cmdLen, messageType *inMessage) { return exchange(cmd, cmdLen, inMessage, 0); }
+readResult exchange(uint8_t *cmd, size_t cmdLen, messageType *inMessage) { 
+    return exchange(cmd, cmdLen, inMessage, 0); 
+}
+
+void exchange(uint8_t *cmd, size_t cmdLen) {
+    messageType response = {};
+    readResult result = exchange(cmd, cmdLen, &response);
+}
