@@ -16,7 +16,9 @@
 #include "nvs_flash.h"
 #include "button.h"
 #include "bow.h"
-#include "cu2.h"
+#if CONFIG_ION_CU2
+    #include "cu2.h"
+#endif
 
 static const char *TAG = "app";
 
@@ -42,8 +44,10 @@ static const int BUTTON_MODE_SHORT_PRESS_BIT = BIT0;
 static const int BUTTON_MODE_LONG_PRESS_BIT = BIT1;
 static const int BUTTON_LIGHT_SHORT_PRESS_BIT = BIT2;
 static const int BUTTON_LIGHT_LONG_PRESS_BIT = BIT3;
+#if CONFIG_ION_CU2
 static const int CHECK_BUTTON_BIT = BIT4;
 static const int DISPLAY_UPDATE_BIT = BIT5;
+#endif
 static const int IGNORE_HELD_BIT = BIT6;
 
 
@@ -184,8 +188,10 @@ static handleMotorMessageResult handleMotorMessage() {
 
         uint8_t cmd[] = {0x02, 0x21, 0x09, 0x00};
         writeMessage(cmd, sizeof(cmd));
+#if CONFIG_ION_CU2
         // Notify display update
-        xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT); 
+        xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT);
+#endif
         return CONTROL_TO_MOTOR;
     } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 10 && message.command == 0x09 && message.payload[1] == 0x38 && message.payload[5] == 0x3a) {
         // PUT DATA 38/3a
@@ -276,6 +282,7 @@ static void my_task(void *pvParameter) {
 
     initUart();
 
+#if CONFIG_ION_CU2
     initCu2(controlEventGroup, 
             BUTTON_MODE_SHORT_PRESS_BIT, 
             BUTTON_MODE_LONG_PRESS_BIT, 
@@ -284,6 +291,7 @@ static void my_task(void *pvParameter) {
             CHECK_BUTTON_BIT,
             IGNORE_HELD_BIT
     );
+#endif
 
     // The state we're in
     control_state state = IDLE;
@@ -311,9 +319,12 @@ static void my_task(void *pvParameter) {
 
         if(lightShortPress) {
             lightOn = !lightOn;
+#if CONFIG_ION_CU2
             xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT); 
+#endif
         }
 
+#if CONFIG_ION_CU2
         EventBits_t bits = xEventGroupWaitBits(controlEventGroup, CHECK_BUTTON_BIT | DISPLAY_UPDATE_BIT, false, false, 0);
         if((bits & CHECK_BUTTON_BIT) != 0) {
             xEventGroupClearBits(controlEventGroup, CHECK_BUTTON_BIT);
@@ -321,11 +332,17 @@ static void my_task(void *pvParameter) {
         } else if((bits & DISPLAY_UPDATE_BIT) != 0) {
             xEventGroupClearBits(controlEventGroup, DISPLAY_UPDATE_BIT);
             showState(level, lightOn, speed, trip);
-        } else if(state == IDLE) {
+        } else 
+#endif
+        if(state == IDLE) {
             if(modeShortPress) {
                 queueBlink(1, 800, 200);
                 state = TURN_MOTOR_ON;
+#if CONFIG_ION_CU2
                 step = 0;
+#else
+                step = 5;
+#endif
             } else {
                 messageType message = {};
                 readResult result = readMessage(&message, 50 / portTICK_PERIOD_MS );
@@ -333,13 +350,18 @@ static void my_task(void *pvParameter) {
                     ESP_LOGI(TAG, "Wakeup!");
                     xEventGroupSetBits(controlEventGroup, IGNORE_HELD_BIT); 
                     state = TURN_MOTOR_ON;
+#if CONFIG_ION_CU2
                     step = 0;
+#else
+                    step = 5;
+#endif
                 } else if(result == MSG_OK){
                     ESP_LOGI(TAG, "Incoming: Tgt:%d, Src:%d, Type:%d, Command:%d", message.target, message.source, message.type, message.command);
                     ESP_LOG_BUFFER_HEX(TAG, message.payload, message.payloadSize);
                 }
             }
         } else if(state == TURN_MOTOR_ON) {
+#if CONFIG_ION_CU2
             if(step == 0) {
                 // Button check command with a special value, maybe just resets
                 // default/display? Or sets timeout? Or initializes display 'clock'?
@@ -367,7 +389,9 @@ static void my_task(void *pvParameter) {
                 // Set default display, which is shown if the display isn't updated for a bit (?)
                 displayUpdate(true, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, false, 10, 0xccc, 0xccccc);
                 step++;
-            } else if(step == 5) {
+            } else 
+#endif
+            if(step == 5) {
                 // Motor on
                 uint8_t cmd[] = {0x01, 0x20, 0x30};
 
@@ -429,9 +453,10 @@ static void my_task(void *pvParameter) {
                 uint8_t cmd[] = {0x01, 0x21, 0x34, level};
                 exchange(cmd, sizeof(cmd));
 
+#if CONFIG_ION_CU2
                 // Notify display update
                 xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT); 
-
+#endif
                 state = MOTOR_ON;
                 step = 0;
             }
@@ -465,13 +490,20 @@ static void my_task(void *pvParameter) {
                 // Really still need to come up with a good setup here. Does the actual system even turn off the motor? Probably only after a while in '0' assist state.
                 // And depending on wether we're moving (by motor update km/h messages)?
                 state = TURN_MOTOR_ON;
+#if CONFIG_ION_CU2
+                step = 0;
+#else
+                step = 5;
+#endif
             }
         }
 
         if(motorHandoffs) {
             if(!handoff()) {
                 // Timeout, assume motor turned off.
+#if CONFIG_ION_CU2
                 stopButtonCheck();
+#endif
                 motorHandoffs = false;
                 state = IDLE;
             }

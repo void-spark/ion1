@@ -7,6 +7,10 @@ menu "Sparta Ion Config"
         int "Led pin"
         default 2
 
+    config ION_CU2
+        bool "Enable CU2 display support"
+        default y
+
     config ION_UART
         int "UART number connected to bus"
         default 2
