@@ -3,6 +3,10 @@ menu "Sparta Ion Config"
         bool "Enable button"
         default y
 
+    config ION_LED_PIN
+        int "Led pin"
+        default 2
+
     config ION_UART
         int "UART number connected to bus"
         default 2

@@ -36,7 +36,7 @@ static const char *TAG = "app";
     #define BUTTON_EXT (GPIO_NUM_4)
 #endif
 
-#define LED_BUILTIN (GPIO_NUM_2)
+#define LED_BUILTIN ((gpio_num_t)CONFIG_ION_LED_PIN)
 
 static const int BUTTON_MODE_SHORT_PRESS_BIT = BIT0;
 static const int BUTTON_MODE_LONG_PRESS_BIT = BIT1;
