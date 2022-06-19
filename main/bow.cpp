@@ -36,6 +36,10 @@ struct parserState {
     int8_t size;
 };
 
+static uint8_t nibbles(uint8_t left, uint8_t right) {
+    return (uint8_t) (right | (left << 4));
+}
+
 void initUart() {
     uart_config_t uart_config = {};
     uart_config.baud_rate = 9600;
@@ -78,11 +82,11 @@ readResult parseByte(uint8_t value, parserState *state) {
         // Second nibble is always message type.
         state->type = low;
     } else if(state->length == 2) {
-        if(state->type == 0x00) {
+        if(state->type == MSG_HANDOFF) {
             state->size = 3;
         } else {
             state->source = high;
-            if(state->type == 0x03 || state->type == 0x04) {
+            if(state->type == MSG_PING_RESP || state->type == MSG_PING_REQ) {
                 state->size = 4;
             } else {
                 state->size = low + 5;
@@ -214,33 +218,48 @@ void writeMessage(uint8_t *message, uint8_t messageLen) {
     uart_write_bytes(UART_NUM, escaped, outPos);
 }
 
-// TODO: also use message as input
-readResult exchange(uint8_t *cmd, size_t cmdLen, messageType *inMessage, const TickType_t timeout) {
-    writeMessage(cmd, cmdLen);
+void writeMessage(messageType message) {
+    uint8_t data[18] = {};
+    size_t length = 1;
+    data[0] = nibbles(message.target, message.type);
+    if(message.type == MSG_PING_REQ || message.type == MSG_PING_RESP) {
+        data[1] = nibbles(message.source, 0);
+        length = 2;
+    } else if(message.type == MSG_CMD_REQ || message.type == MSG_CMD_RESP) {
+        data[1] = nibbles(message.source, message.payloadSize);
+        data[2] = message.command;
+        memcpy(data + 3, message.payload, message.payloadSize);
+        length = 3 + message.payloadSize;
+    }
+    writeMessage(data, length);
+}
+
+readResult exchange(messageType outMessage, messageType *inMessage, const TickType_t timeout) {
+    writeMessage(outMessage);
     readResult result;
     while(true) {
         result = readMessage(inMessage, timeout);
         if(result == MSG_TIMEOUT) {
             // Retry
-            writeMessage(cmd, cmdLen);
+            writeMessage(outMessage);
         } else if(result == MSG_OK && inMessage->target == 0x02) {
             // We got our response
             break;
         }
     }
 
-    if(inMessage->command != cmd[2]) {
-        ESP_LOGE(TAG, "Wrong reply cmd, expected %02x, got %02x", cmd[2], inMessage->command);
+    if(inMessage->command != outMessage.command) {
+        ESP_LOGE(TAG, "Wrong reply cmd, expected %02x, got %02x", outMessage.command, inMessage->command);
     }
 
     return result;
 }
 
-readResult exchange(uint8_t *cmd, size_t cmdLen, messageType *inMessage) { 
-    return exchange(cmd, cmdLen, inMessage, 0); 
+readResult exchange(messageType outMessage, messageType *inMessage) { 
+    return exchange(outMessage, inMessage, 0); 
 }
 
-void exchange(uint8_t *cmd, size_t cmdLen) {
+void exchange(messageType outMessage) {
     messageType response = {};
-    readResult result = exchange(cmd, cmdLen, &response);
+    readResult result = exchange(outMessage, &response);
 }

@@ -3,6 +3,16 @@
 #include <sys/unistd.h>
 #include "freertos/FreeRTOS.h"
 
+#define MSG_HANDOFF 0x0
+#define MSG_CMD_REQ 0x1
+#define MSG_CMD_RESP 0x2
+#define MSG_PING_REQ 0x4
+#define MSG_PING_RESP 0x3
+
+#define MSG_MOTOR 0x0
+#define MSG_BMS 0x2
+#define MSG_DISPLAY 0xC
+
 struct messageType {
     // The target of the message
     uint8_t target;
@@ -35,7 +45,7 @@ enum readResult {
 void initUart();
 readResult readMessage(messageType *message, TickType_t timeout);
 readResult readMessage(messageType *message);
-void writeMessage(uint8_t *message, uint8_t messageLen);
-readResult exchange(uint8_t *cmd, size_t cmdLen, messageType *inMessage, const TickType_t timeout);
-readResult exchange(uint8_t *cmd, size_t cmdLen, messageType *inMessage);
-void exchange(uint8_t *cmd, size_t cmdLen);
+void writeMessage(messageType message);
+readResult exchange(messageType outMessage, messageType *inMessage, const TickType_t timeout);
+readResult exchange(messageType outMessage, messageType *inMessage);
+void exchange(messageType outMessage);

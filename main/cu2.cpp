@@ -3,6 +3,7 @@
 #include "freertos/timers.h"
 #include "freertos/event_groups.h"
 #include "bow.h"
+#include "cmds.h"
 
 #include "cu2.h"
 
@@ -55,10 +56,10 @@ void buttonCheck() {
 
     // Button check command, should run every 100ms.
     // Reply indicates if/which button is pressed.
-    uint8_t cmd[] = {0xc1, 0x21, 0x22, count};
+    uint8_t payload[] = {count};
 
     messageType response = {};
-    readResult result = exchange(cmd, sizeof(cmd), &response);
+    readResult result = exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x22, payload, sizeof(payload)), &response);
 
     // The first is '00','01','02' or '03', depending on whether the top, bottom, or both buttons are presse
 
@@ -155,7 +156,6 @@ void displayUpdate(bool setDefault,
     uint8_t numBottom2 = (uint8_t)(bottomVal >> 8);
     uint8_t numBottom3 = (uint8_t)(bottomVal >> 0);
 
-    uint8_t cmd[] = {0xc1, 0x29, (uint8_t)(setDefault ? 0x27 : 0x26), assist, segments1, segments2, battery, numTop1, numTop2, numBottom1, numBottom2, numBottom3};
-
-    exchange(cmd, sizeof(cmd));
+    uint8_t payload[] = {assist, segments1, segments2, battery, numTop1, numTop2, numBottom1, numBottom2, numBottom3};
+    exchange(cmdReq(MSG_DISPLAY, MSG_BMS, (uint8_t)(setDefault ? 0x27 : 0x26), payload, sizeof(payload)));
 }

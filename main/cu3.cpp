@@ -1,5 +1,6 @@
 #include <sys/unistd.h>
 #include "bow.h"
+#include "cmds.h"
 
 #include "cu3.h"
 
@@ -21,13 +22,10 @@ void displayUpdateCu3(uint8_t assist, uint16_t speed, uint32_t trip1, uint32_t t
     uint8_t byte2 = 0x08; // 00(0000) Light off(??), 08(1000) light on, 09(1001) light auto. But also (auto??) turns off display at 00 ?!???
                             // Other:   0x0A(1010) Backlight off, 0x0B(1011) = Backlight on, 0x0C(1100) = Range extender?
 
-    uint8_t cmd[] = {0xc1, 0x2d, 0x28, 
-    byte0, 
-    assist, 
-    byte2, 
+    uint8_t payload[] = {byte0, assist, byte2, 
     (uint8_t)(speed >> 8), (uint8_t)(speed >> 0),
     (uint8_t)(trip1 >> 24), (uint8_t)(trip1 >> 16), (uint8_t)(trip1 >> 8), (uint8_t)(trip1 >> 0),
     (uint8_t)(trip2 >> 24), (uint8_t)(trip2 >> 16), (uint8_t)(trip2 >> 8), (uint8_t)(trip2 >> 0)};
     messageType message = {};
-    readResult result = exchange(cmd, sizeof(cmd), &message, 225 / portTICK_PERIOD_MS );
+    readResult result = exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x28, payload, sizeof(payload)), &message, 225 / portTICK_PERIOD_MS );
 }

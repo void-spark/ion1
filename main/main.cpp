@@ -16,6 +16,7 @@
 #include "nvs_flash.h"
 #include "button.h"
 #include "bow.h"
+#include "cmds.h"
 #if CONFIG_ION_CU2
     #include "cu2.h"
 #elif CONFIG_ION_CU3
@@ -130,10 +131,6 @@ static uint32_t toUint32(uint8_t *buffer, size_t offset) {
     return ((uint32_t)buffer[offset] << 24) | ((uint32_t)buffer[offset + 1] << 16) | ((uint32_t)buffer[offset + 2] << 8) | ((uint32_t)buffer[offset + 3] << 0);
 }
 
-static uint8_t nibbles(uint8_t left, uint8_t right) {
-    return (uint8_t) (right | (left << 4));
-}
-
 static handleMotorMessageResult handleMotorMessage() {
     messageType message = {};
     readResult result;
@@ -144,91 +141,60 @@ static handleMotorMessageResult handleMotorMessage() {
             // Most likely the motor turned off, after we told it to (XHP, Toprun doesn't seem to stop)
             return HANDOFF_TIMEOUT;
         }
-    } while(result != MSG_OK || message.target != 0x2);
+    } while(result != MSG_OK || message.target != MSG_BMS);
 
-    if(message.type == 0x0) {
+    if(message.type == MSG_HANDOFF) {
         // Handoff back to us
         return CONTROL_TO_US;
-    } else if(message.type == 0x4) {
+    } else if(message.type == MSG_PING_REQ) {
         // ESP_LOGI(TAG, "|PING");
-        uint8_t cmd[] = {nibbles(message.source, 0x03), 0x20};
-        writeMessage(cmd, sizeof(cmd));
+        writeMessage(pingResp(message.source, MSG_BMS));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.payloadSize == 0 && message.command == 0x01) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 0 && message.command == 0x01) {
         // MYSTERY BATTERY COMMAND 01
-        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x22, 0x01, 0x02, 0x02};
-        writeMessage(cmd, sizeof(cmd));
+        uint8_t payload[] = {0x02, 0x02};
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.payloadSize == 0 && message.command == 0x14) {
-        // MYSTERY BATTERY COMMAND 14
-        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x20, 0x14};
-        writeMessage(cmd, sizeof(cmd));
-        return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 1 && message.command == 0x12) {
-        // MYSTERY BATTERY COMMAND 12
-        uint8_t cmd[] = {0x02, 0x20, 0x12};
-        writeMessage(cmd, sizeof(cmd));
-        return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 0 && message.command == 0x11) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 0 && message.command == 0x11) {
         // MYSTERY BATTERY COMMAND 11
-        uint8_t cmd[] = {0x02, 0x20, 0x11};
-        writeMessage(cmd, sizeof(cmd));
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.payloadSize == 1 && message.command == 0x1c) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == 0x12) {
+        // MYSTERY BATTERY COMMAND 12
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 0 && message.command == 0x14) {
+        // MYSTERY BATTERY COMMAND 14
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == 0x1c) {
         // Set light
-        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x20, 0x1c};
-        writeMessage(cmd, sizeof(cmd));
+        lightOn = message.payload[0];
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.payloadSize == 1 && message.command == 0x1d) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == 0x1d) {
         // Set assist
-        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x20, 0x1d};
-        writeMessage(cmd, sizeof(cmd));
         level = message.payload[0];
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 2 && message.command == 0x08 && message.payload[1] == 0x2a) {
-        // GET DATA 002a
-        uint8_t cmd[] = {0x02, 0x24, 0x08, 0x00, 0x00, 0x2a, 0x01};
-        writeMessage(cmd, sizeof(cmd));
-        return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.payloadSize == 2 && message.command== 0x08 && message.payload[1] == 0x18) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == 0x08 && message.payload[1] == 0x18) {
         // GET DATA 1418 14:18(Battery level)
-        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x25, 0x08, 0x00, 0x14, 0x18,  0x1e, 0xb5};
-        writeMessage(cmd, sizeof(cmd));
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x1e, 0xb5};
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.payloadSize == 4 && message.command== 0x08 && message.payload[1] == 0x18 && message.payload[3] == 0x1a) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 4 && message.command == 0x08 && message.payload[1] == 0x18 && message.payload[3] == 0x1a) {
         // GET DATA 9418141a 14:18(Battery level) 14:1a(Max battery level)
-        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x29, 0x08, 0x00, 0x94, 0x18,  0x1e, 0xb7,  0x14, 0x1a,  0x1f, 0x53 };
-        writeMessage(cmd, sizeof(cmd));
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x1e, 0xb7, message.payload[2], message.payload[3], 0x1f, 0x53};
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.payloadSize == 2 && message.command== 0x08 && message.payload[1] == 0x80) {
-        // GET DATA 0880 08:80(Total distance)
-        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x27, 0x08, 0x00, 0x08, 0x80,  0x00, 0x11, 0xd4, 0xcd};
-        writeMessage(cmd, sizeof(cmd));
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == 0x08 && message.payload[1] == 0x2a) {
+        // GET DATA 002a 00:2a(Unknown)
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x01};
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.payloadSize == 2 && message.command== 0x08 && message.payload[1] == 0x94) {
-        // GET DATA 2894 28:94(Unknown)
-        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x27, 0x08, 0x00, 0x28, 0x94,  0x40, 0x0e, 0x14, 0x7b};
-        writeMessage(cmd, sizeof(cmd));
-        return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.payloadSize == 2 && message.command== 0x08 && message.payload[1] == 0x8e) {
-        // GET DATA 088e 08:8e(Time)
-        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x27, 0x08, 0x00, 0x08, 0x8e,  0x00, 0x00, 0xfb, 0xe2};
-        writeMessage(cmd, sizeof(cmd));
-        return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.payloadSize == 3 && message.command== 0x08 && message.payload[1] == 0x99 && message.payload[2] == 0x00) {
-        // GET DATA 489900 48:99[0](Trip time)
-        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x2c, 0x08, 0x00, 0x48, 0x99,  0x02,  0x00, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0xf6};
-        writeMessage(cmd, sizeof(cmd));
-        return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.payloadSize == 3 && message.command== 0x08 && message.payload[1] == 0x9a && message.payload[2] == 0x00) {
-        // GET DATA 449a00 44:9a[0](Max speed)
-        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x28, 0x08, 0x00, 0x44, 0x9a,  0x02,  0x00, 0x00,  0x00, 0xd0};
-        writeMessage(cmd, sizeof(cmd));
-        return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 4 && message.command== 0x08 && message.payload[1] == 0x38 && message.payload[3] == 0x3a) {
-        // GET DATA 9438283a
-        // ESP_LOGI(TAG, "|GET-38-3a");
-        uint8_t cmd[] = {0x02, 0x2b, 0x08, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // Data (last 10 bytes) to be replaced
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 4 && message.command == 0x08 && message.payload[1] == 0x38 && message.payload[3] == 0x3a) {
+        // GET DATA 9438283a 14:38(Calibration A) 28:3a(Calibration B)
+        uint8_t payload[] = {0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // Data (last 10 bytes) to be replaced
 
         struct stat st;
         if(stat(CALIBRATION_FILE, &st) == 0) {
@@ -237,35 +203,56 @@ static handleMotorMessageResult handleMotorMessage() {
                 ESP_LOGE(TAG, "Failed to open calibration file for reading");
                 return CONTROL_TO_MOTOR;
             }
-            fread(cmd + 4, 1, 10, fp);
+            fread(payload + 1, 1, 10, fp);
             fclose(fp);
         } else {
             // Backup data
             // Gold small test: 94 38 4b 13 28 3a 3e 98 ed f3
             uint8_t data[] = {0x94, 0x38, 0x4b, 0x15, 0x28, 0x3a, 0x3e, 0x91, 0x79, 0x50}; // This needs to be good calibration data!
-            memcpy(cmd + 4, data, 10);
+            memcpy(payload + 1, data, 10);
         }
 
-        writeMessage(cmd, sizeof(cmd));
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 10 && message.command == 0x09 && message.payload[1] == 0xc0 && message.payload[5] == 0xc1) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == 0x08 && message.payload[1] == 0x80) {
+        // GET DATA 0880 08:80(Total distance)
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x00, 0x11, 0xd4, 0xcd};
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == 0x08 && message.payload[1] == 0x8e) {
+        // GET DATA 088e 08:8e(Time)
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x00, 0x00, 0xfb, 0xe2};
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == 0x08 && message.payload[1] == 0x94) {
+        // GET DATA 2894 28:94(Unknown)
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x40, 0x0e, 0x14, 0x7b};
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 3 && message.command == 0x08 && message.payload[1] == 0x99 && message.payload[2] == 0x00) {
+        // GET DATA 489900 48:99[0](Trip time)
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6};
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 3 && message.command == 0x08 && message.payload[1] == 0x9a && message.payload[2] == 0x00) {
+        // GET DATA 449a00 44:9a[0](Max speed)
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x02, 0x00, 0x00, 0x00, 0xd0};
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == 0x09 && message.payload[1] == 0xc0 && message.payload[5] == 0xc1) {
         // PUT DATA c0/c1
-        // ESP_LOGI(TAG, "|PUT-c0-c1");
-
         speed = toUint16(message.payload, 2);
         trip = toUint32(message.payload, 6);
 
-        uint8_t cmd[] = {0x02, 0x21, 0x09, 0x00};
-        writeMessage(cmd, sizeof(cmd));
+        uint8_t payload[] = {0x00};
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
 #if CONFIG_ION_CU2 || CONFIG_ION_CU3
         // Notify display update
         xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT);
 #endif
         return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 10 && message.command == 0x09 && message.payload[1] == 0x38 && message.payload[5] == 0x3a) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == 0x09 && message.payload[1] == 0x38 && message.payload[5] == 0x3a) {
         // PUT DATA 38/3a
-        // ESP_LOGI(TAG, "|PUT-38-3a");
-
         FILE *fp = fopen(CALIBRATION_FILE, "w");
         if(fp == NULL) {
             ESP_LOGE(TAG, "Failed to open calibration file for writing");
@@ -274,8 +261,8 @@ static handleMotorMessageResult handleMotorMessage() {
         fwrite(message.payload, 1, 10, fp);
         fclose(fp);
 
-        uint8_t cmd[] = {0x02, 0x21, 0x09, 0x00};
-        writeMessage(cmd, sizeof(cmd));
+        uint8_t payload[] = {0x00};
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
     }
 
@@ -288,11 +275,11 @@ static handleMotorMessageResult handleMotorMessage() {
 static bool handoff() {
 
 #if CONFIG_ION_CU3
-    uint8_t cmd[] = {0xC0}; // HANDOFF to display
+    uint8_t handoffTarget = MSG_DISPLAY;
 #else
-    uint8_t cmd[] = {0x00}; // HANDOFF to motor
+    uint8_t handoffTarget = MSG_MOTOR;
 #endif
-    writeMessage(cmd, sizeof(cmd));
+    writeMessage(handoffMsg(handoffTarget));
 
     while(true) {
         handleMotorMessageResult result = handleMotorMessage();
@@ -451,10 +438,9 @@ static void my_task(void *pvParameter) {
             if(step == 0) {
                 // Button check command with a special value, maybe just resets
                 // default/display? Or sets timeout? Or initializes display 'clock'?
-                uint8_t cmd[] = {0xc1, 0x21, 0x22, 0x80};
-
+                uint8_t payload[] = {0x80};
                 messageType message = {};
-                readResult result = exchange(cmd, sizeof(cmd), &message, 225 / portTICK_PERIOD_MS );
+                readResult result = exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x22, payload, sizeof(payload)), &message, 225 / portTICK_PERIOD_MS );
                 step++;
             } else if(step == 1) {
                 // Update display
@@ -463,8 +449,8 @@ static void my_task(void *pvParameter) {
             } else if(step == 2) {
                 // Unknown command which is always the same and always sent to the
                 // display at this point.
-                uint8_t cmd[] = {0xc1, 0x22, 0x25, 0x04, 0x08};
-                exchange(cmd, sizeof(cmd));
+                uint8_t payload[] = {0x04, 0x08};
+                exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x25, payload, sizeof(payload)));
                 step++;
             } else if(step == 3) {
                 // First normal button check command, after this should run every 100ms.
@@ -478,33 +464,29 @@ static void my_task(void *pvParameter) {
             } else 
 #endif
             if(step == 5) {
-                // Motor on
-                uint8_t cmd[] = {0x01, 0x20, 0x30};
-
                 messageType message = {};
+                // Motor on
                 // Original BMS seems to repeat handoff till the motor responds, with 41ms between commands, but this should also work.
-                exchange(cmd, sizeof(cmd), &message, 41 / portTICK_PERIOD_MS);
+                exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x30), &message, 41 / portTICK_PERIOD_MS);
                 motorHandoffs = true;
                 step++;
             } else if(step == 6) {
-                // Put data, which is common after motor on, left value is unknown,
-                // right is voltage.
-                uint8_t cmd[] = {0x01, 0x28, 0x09, 0x94, 0xb0, 0x09, 0xc4, 0x14, 0xb1, 0x01, 0x14}; // PUT DATA (2500|27.6)
-                exchange(cmd, sizeof(cmd));
+                // Put data, which is common after motor on, left value is unknown, right is voltage.
+                uint8_t payload[] = {0x94, 0xb0, 0x09, 0xc4, 0x14, 0xb1, 0x01, 0x14}; // PUT DATA (2500|27.6)
+                exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x09, payload, sizeof(payload)));
 #if CONFIG_ION_CU2 || CONFIG_ION_CU3
                 step++;
             } else if(step == 7) {
                 // Get display serial
-                uint8_t cmd[] = {0xc1, 0x20, 0x20};
                 messageType response = {};
-                exchange(cmd, sizeof(cmd), &response);
+                exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x20), &response);
                 memcpy(displaySerial, response.payload, 8);
                 step++;
             } else if(step == 8) {
                 // Get serial progammed in motor slot 2
-                uint8_t cmd[] = {0x01, 0x23, 0x08, 0x40, 0x5c, 0x00};
                 messageType response = {};
-                exchange(cmd, sizeof(cmd), &response);
+                uint8_t payload[] = {0x40, 0x5c, 0x00};
+                exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x08, payload, sizeof(payload)), &response);
                 if(response.payload[3] == 8) {
                     memcpy(motorSlot2Serial, response.payload + 4, 8);
                 }
@@ -515,11 +497,11 @@ static void my_task(void *pvParameter) {
                     step++;
                 }
             } else if(step == 9) {
-                // Program serial in slot 2
-                uint8_t cmd[] = {0x01, 0x2d, 0x09, 0x40, 0x5c, 0x00, 0x08, 0x08, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // Program serial in motor slot 2
-                memcpy(cmd + 8, displaySerial, 8);
+                // Program serial in motor slot 2
+                uint8_t payload[] = {0x40, 0x5c, 0x00, 0x08, 0x08, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+                memcpy(payload + 5, displaySerial, 8);
                 messageType response = {};
-                exchange(cmd, sizeof(cmd), &response);
+                exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x09, payload, sizeof(payload)), &response);
 #endif
                 state = MOTOR_ON;
                 step = 0;
@@ -546,13 +528,12 @@ static void my_task(void *pvParameter) {
             }
         } else if(state == START_CALIBRATE) {
             // Start calibration
-            uint8_t cmdc1[] = {0x01, 0x20, 0x35};
-            exchange(cmdc1, sizeof(cmdc1));
+            exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x35));
             handoff();
 
             // Put data, which is common after calibrate. No idea what it's for.
-            uint8_t cmdc2[] = {0x01, 0x22, 0x08, 0x00, 0xdf};
-            exchange(cmdc2, sizeof(cmdc2));
+            uint8_t payload[] = {0x00, 0xdf};
+            exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x08, payload, sizeof(payload)));
             handoff();
 
             // BMS actually stops listening here, it ignores (some?) motor messages.
@@ -561,8 +542,7 @@ static void my_task(void *pvParameter) {
             if(level == 0) {
                 if(assistOn) {
                     // Assist off
-                    uint8_t cmd[] = {0x01, 0x20, 0x33};
-                    exchange(cmd, sizeof(cmd));
+                    exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x33));
                     assistOn = false;
 
                     // TODO: Start waiting for MYSTERY BAT COMMAND 12 (with arg 0), while
@@ -579,8 +559,7 @@ static void my_task(void *pvParameter) {
             } else {
                 if(!assistOn) {
                     // Assist on
-                    uint8_t cmd[] = {0x01, 0x20, 0x32};
-                    exchange(cmd, sizeof(cmd));
+                    exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x32));
                     assistOn = true;
 
                     // TODO: Start waiting for MYSTERY BAT COMMAND 12 (with arg 1), while
@@ -588,8 +567,8 @@ static void my_task(void *pvParameter) {
                     // signal the next state.
                 } else {
                     // Set assist level
-                    uint8_t cmd[] = {0x01, 0x21, 0x34, level};
-                    exchange(cmd, sizeof(cmd));
+                    uint8_t payload[] = {level};
+                    exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x34, payload, sizeof(payload)));
 
                     levelSet = level;
 #if CONFIG_ION_CU2 || CONFIG_ION_CU3
@@ -603,8 +582,7 @@ static void my_task(void *pvParameter) {
         } else if(state == TURN_MOTOR_OFF) {
             if(assistOn) {
                 // Assist off
-                uint8_t cmd[] = {0x01, 0x20, 0x33};
-                exchange(cmd, sizeof(cmd));
+                exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x33));
                 assistOn = false;
 
                 // TODO: Start waiting for MYSTERY BAT COMMAND 12 (with arg 0), while
@@ -612,8 +590,8 @@ static void my_task(void *pvParameter) {
                 // signal the next state.
             } else {
                 // Motor off
-                uint8_t cmd[] = {0x01, 0x21, 0x31, 0x00};
-                exchange(cmd, sizeof(cmd));
+                uint8_t payload[] = {0x00};
+                exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x31, payload, sizeof(payload)));
                 // NOTE: XHP after this will stop responding to handoff messages after some time (and a put data message)
                 // TODO: Maybe wait for cmd 11? (No cmd 11 from XHP?)
                 state = MOTOR_OFF;
