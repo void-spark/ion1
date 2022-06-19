@@ -18,6 +18,8 @@
 #include "bow.h"
 #if CONFIG_ION_CU2
     #include "cu2.h"
+#elif CONFIG_ION_CU3
+    #include "cu3.h"
 #endif
 
 static const char *TAG = "app";
@@ -46,9 +48,20 @@ static const int BUTTON_LIGHT_SHORT_PRESS_BIT = BIT2;
 static const int BUTTON_LIGHT_LONG_PRESS_BIT = BIT3;
 #if CONFIG_ION_CU2
 static const int CHECK_BUTTON_BIT = BIT4;
+#endif
+#if CONFIG_ION_CU2 || CONFIG_ION_CU3
 static const int DISPLAY_UPDATE_BIT = BIT5;
 #endif
 static const int IGNORE_HELD_BIT = BIT6;
+
+
+#if CONFIG_ION_CU2
+    #define TURN_MOTOR_ON_START_STEP 0
+#elif CONFIG_ION_CU3
+    #define TURN_MOTOR_ON_START_STEP 4
+#else
+    #define TURN_MOTOR_ON_START_STEP 5
+#endif
 
 
 static EventGroupHandle_t controlEventGroup;
@@ -117,6 +130,10 @@ static uint32_t toUint32(uint8_t *buffer, size_t offset) {
     return ((uint32_t)buffer[offset] << 24) | ((uint32_t)buffer[offset + 1] << 16) | ((uint32_t)buffer[offset + 2] << 8) | ((uint32_t)buffer[offset + 3] << 0);
 }
 
+static uint8_t nibbles(uint8_t left, uint8_t right) {
+    return (uint8_t) (right | (left << 4));
+}
+
 static handleMotorMessageResult handleMotorMessage() {
     messageType message = {};
     readResult result;
@@ -129,31 +146,83 @@ static handleMotorMessageResult handleMotorMessage() {
         }
     } while(result != MSG_OK || message.target != 0x2);
 
-    if(message.type == 0x0) { // Handoff back to battery
-        // ESP_LOGI(TAG, "|HNDF");
+    if(message.type == 0x0) {
+        // Handoff back to us
         return CONTROL_TO_US;
-    } else if(message.type == 0x4 && message.source == 0x0) {
-        // PING
+    } else if(message.type == 0x4) {
         // ESP_LOGI(TAG, "|PING");
-        uint8_t cmd[] = {0x03, 0x20};
+        uint8_t cmd[] = {nibbles(message.source, 0x03), 0x20};
+        writeMessage(cmd, sizeof(cmd));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == 0x1 && message.payloadSize == 0 && message.command == 0x01) {
+        // MYSTERY BATTERY COMMAND 01
+        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x22, 0x01, 0x02, 0x02};
+        writeMessage(cmd, sizeof(cmd));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == 0x1 && message.payloadSize == 0 && message.command == 0x14) {
+        // MYSTERY BATTERY COMMAND 14
+        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x20, 0x14};
         writeMessage(cmd, sizeof(cmd));
         return CONTROL_TO_MOTOR;
     } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 1 && message.command == 0x12) {
         // MYSTERY BATTERY COMMAND 12
-        // ESP_LOGI(TAG, "|BT:12");
         uint8_t cmd[] = {0x02, 0x20, 0x12};
         writeMessage(cmd, sizeof(cmd));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 0 && message.command== 0x11) {
+    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 0 && message.command == 0x11) {
         // MYSTERY BATTERY COMMAND 11
-        // ESP_LOGI(TAG, "|BT:11");
         uint8_t cmd[] = {0x02, 0x20, 0x11};
         writeMessage(cmd, sizeof(cmd));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 2 && message.command== 0x08 && message.payload[1] == 0x2a) {
+    } else if(message.type == 0x1 && message.payloadSize == 1 && message.command == 0x1c) {
+        // Set light
+        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x20, 0x1c};
+        writeMessage(cmd, sizeof(cmd));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == 0x1 && message.payloadSize == 1 && message.command == 0x1d) {
+        // Set assist
+        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x20, 0x1d};
+        writeMessage(cmd, sizeof(cmd));
+        level = message.payload[0];
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 2 && message.command == 0x08 && message.payload[1] == 0x2a) {
         // GET DATA 002a
-        // ESP_LOGI(TAG, "|GET-2a");
         uint8_t cmd[] = {0x02, 0x24, 0x08, 0x00, 0x00, 0x2a, 0x01};
+        writeMessage(cmd, sizeof(cmd));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == 0x1 && message.payloadSize == 2 && message.command== 0x08 && message.payload[1] == 0x18) {
+        // GET DATA 1418 14:18(Battery level)
+        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x25, 0x08, 0x00, 0x14, 0x18,  0x1e, 0xb5};
+        writeMessage(cmd, sizeof(cmd));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == 0x1 && message.payloadSize == 4 && message.command== 0x08 && message.payload[1] == 0x18 && message.payload[3] == 0x1a) {
+        // GET DATA 9418141a 14:18(Battery level) 14:1a(Max battery level)
+        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x29, 0x08, 0x00, 0x94, 0x18,  0x1e, 0xb7,  0x14, 0x1a,  0x1f, 0x53 };
+        writeMessage(cmd, sizeof(cmd));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == 0x1 && message.payloadSize == 2 && message.command== 0x08 && message.payload[1] == 0x80) {
+        // GET DATA 0880 08:80(Total distance)
+        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x27, 0x08, 0x00, 0x08, 0x80,  0x00, 0x11, 0xd4, 0xcd};
+        writeMessage(cmd, sizeof(cmd));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == 0x1 && message.payloadSize == 2 && message.command== 0x08 && message.payload[1] == 0x94) {
+        // GET DATA 2894 28:94(Unknown)
+        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x27, 0x08, 0x00, 0x28, 0x94,  0x40, 0x0e, 0x14, 0x7b};
+        writeMessage(cmd, sizeof(cmd));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == 0x1 && message.payloadSize == 2 && message.command== 0x08 && message.payload[1] == 0x8e) {
+        // GET DATA 088e 08:8e(Time)
+        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x27, 0x08, 0x00, 0x08, 0x8e,  0x00, 0x00, 0xfb, 0xe2};
+        writeMessage(cmd, sizeof(cmd));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == 0x1 && message.payloadSize == 3 && message.command== 0x08 && message.payload[1] == 0x99 && message.payload[2] == 0x00) {
+        // GET DATA 489900 48:99[0](Trip time)
+        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x2c, 0x08, 0x00, 0x48, 0x99,  0x02,  0x00, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0xf6};
+        writeMessage(cmd, sizeof(cmd));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == 0x1 && message.payloadSize == 3 && message.command== 0x08 && message.payload[1] == 0x9a && message.payload[2] == 0x00) {
+        // GET DATA 449a00 44:9a[0](Max speed)
+        uint8_t cmd[] = {nibbles(message.source, 0x02), 0x28, 0x08, 0x00, 0x44, 0x9a,  0x02,  0x00, 0x00,  0x00, 0xd0};
         writeMessage(cmd, sizeof(cmd));
         return CONTROL_TO_MOTOR;
     } else if(message.type == 0x1 && message.source == 0x0 && message.payloadSize == 4 && message.command== 0x08 && message.payload[1] == 0x38 && message.payload[3] == 0x3a) {
@@ -188,7 +257,7 @@ static handleMotorMessageResult handleMotorMessage() {
 
         uint8_t cmd[] = {0x02, 0x21, 0x09, 0x00};
         writeMessage(cmd, sizeof(cmd));
-#if CONFIG_ION_CU2
+#if CONFIG_ION_CU2 || CONFIG_ION_CU3
         // Notify display update
         xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT);
 #endif
@@ -218,7 +287,11 @@ static handleMotorMessageResult handleMotorMessage() {
 
 static bool handoff() {
 
+#if CONFIG_ION_CU3
+    uint8_t cmd[] = {0xC0}; // HANDOFF to display
+#else
     uint8_t cmd[] = {0x00}; // HANDOFF to motor
+#endif
     writeMessage(cmd, sizeof(cmd));
 
     while(true) {
@@ -299,12 +372,17 @@ static void my_task(void *pvParameter) {
     uint8_t step = 0;
     bool motorHandoffs = false;
     bool assistOn = false;
+    uint8_t levelSet = level;
+    uint8_t displaySerial[8] = {};
+    uint8_t motorSlot2Serial[8] = {};
+
 
     while(true) {
 
         // TODO:
         // Use 'step' for calibrate, double check logic of all states.
         // How do we go back to IDLE state? (timeout when level = 0?)
+        // More use of timeouts
 
         // TODO:
         // Instead .. ? can we wait on event bits AND rx?
@@ -319,7 +397,7 @@ static void my_task(void *pvParameter) {
 
         if(lightShortPress) {
             lightOn = !lightOn;
-#if CONFIG_ION_CU2
+#if CONFIG_ION_CU2 || CONFIG_ION_CU3
             xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT); 
 #endif
         }
@@ -329,20 +407,25 @@ static void my_task(void *pvParameter) {
         if((bits & CHECK_BUTTON_BIT) != 0) {
             xEventGroupClearBits(controlEventGroup, CHECK_BUTTON_BIT);
             buttonCheck();
-        } else if((bits & DISPLAY_UPDATE_BIT) != 0) {
+        } else
+#elif CONFIG_ION_CU3
+        EventBits_t bits = xEventGroupWaitBits(controlEventGroup, DISPLAY_UPDATE_BIT, false, false, 0);
+#endif
+#if CONFIG_ION_CU2 || CONFIG_ION_CU3
+         if((bits & DISPLAY_UPDATE_BIT) != 0) {
             xEventGroupClearBits(controlEventGroup, DISPLAY_UPDATE_BIT);
+#if CONFIG_ION_CU2
             showState(level, lightOn, speed, trip);
+#elif CONFIG_ION_CU3
+            showStateCu3(level, lightOn, speed, trip);
+#endif
         } else 
 #endif
         if(state == IDLE) {
             if(modeShortPress) {
                 queueBlink(1, 800, 200);
                 state = TURN_MOTOR_ON;
-#if CONFIG_ION_CU2
-                step = 0;
-#else
-                step = 5;
-#endif
+                step = TURN_MOTOR_ON_START_STEP;
             } else {
                 messageType message = {};
                 readResult result = readMessage(&message, 50 / portTICK_PERIOD_MS );
@@ -350,17 +433,20 @@ static void my_task(void *pvParameter) {
                     ESP_LOGI(TAG, "Wakeup!");
                     xEventGroupSetBits(controlEventGroup, IGNORE_HELD_BIT); 
                     state = TURN_MOTOR_ON;
-#if CONFIG_ION_CU2
-                    step = 0;
-#else
-                    step = 5;
-#endif
+                    step = TURN_MOTOR_ON_START_STEP;
                 } else if(result == MSG_OK){
                     ESP_LOGI(TAG, "Incoming: Tgt:%d, Src:%d, Type:%d, Command:%d", message.target, message.source, message.type, message.command);
                     ESP_LOG_BUFFER_HEX(TAG, message.payload, message.payloadSize);
                 }
             }
         } else if(state == TURN_MOTOR_ON) {
+#if CONFIG_ION_CU3
+            // TODO: Update display every 1.5 second, unless already updated (from motor message)
+            if(step == 4) {
+                displayUpdateCu3(0, 0, 0, 0);
+                step++;
+            } else 
+#endif
 #if CONFIG_ION_CU2
             if(step == 0) {
                 // Button check command with a special value, maybe just resets
@@ -405,11 +491,44 @@ static void my_task(void *pvParameter) {
                 // right is voltage.
                 uint8_t cmd[] = {0x01, 0x28, 0x09, 0x94, 0xb0, 0x09, 0xc4, 0x14, 0xb1, 0x01, 0x14}; // PUT DATA (2500|27.6)
                 exchange(cmd, sizeof(cmd));
+#if CONFIG_ION_CU2 || CONFIG_ION_CU3
+                step++;
+            } else if(step == 7) {
+                // Get display serial
+                uint8_t cmd[] = {0xc1, 0x20, 0x20};
+                messageType response = {};
+                exchange(cmd, sizeof(cmd), &response);
+                memcpy(displaySerial, response.payload, 8);
+                step++;
+            } else if(step == 8) {
+                // Get serial progammed in motor slot 2
+                uint8_t cmd[] = {0x01, 0x23, 0x08, 0x40, 0x5c, 0x00};
+                messageType response = {};
+                exchange(cmd, sizeof(cmd), &response);
+                if(response.payload[3] == 8) {
+                    memcpy(motorSlot2Serial, response.payload + 4, 8);
+                }
+                if(memcmp(displaySerial, motorSlot2Serial, 8) == 0) {
+                    state = MOTOR_ON;
+                    step = 0;
+                } else {
+                    step++;
+                }
+            } else if(step == 9) {
+                // Program serial in slot 2
+                uint8_t cmd[] = {0x01, 0x2d, 0x09, 0x40, 0x5c, 0x00, 0x08, 0x08, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // Program serial in motor slot 2
+                memcpy(cmd + 8, displaySerial, 8);
+                messageType response = {};
+                exchange(cmd, sizeof(cmd), &response);
+#endif
                 state = MOTOR_ON;
                 step = 0;
             }
         } else if(state == MOTOR_ON) {
-            if(level == 0x00 && lightOn == false && lightLongPress) {
+            if(level != levelSet) {
+                state = SET_ASSIST_LEVEL;
+                step = 0;
+            } else if(level == 0x00 && lightOn == false && lightLongPress) {
                 queueBlink(10, 100, 100);
                 state = START_CALIBRATE;
             } else if(modeShortPress) {
@@ -439,27 +558,48 @@ static void my_task(void *pvParameter) {
             // BMS actually stops listening here, it ignores (some?) motor messages.
             state = MOTOR_ON;
         } else if(state == SET_ASSIST_LEVEL) {
-            if(!assistOn) {
-                // Assist on
-                uint8_t cmd[] = {0x01, 0x20, 0x32};
-                exchange(cmd, sizeof(cmd));
-                assistOn = true;
+            if(level == 0) {
+                if(assistOn) {
+                    // Assist off
+                    uint8_t cmd[] = {0x01, 0x20, 0x33};
+                    exchange(cmd, sizeof(cmd));
+                    assistOn = false;
 
-                // TODO: Start waiting for MYSTERY BAT COMMAND 12 (with arg 1), while
-                // doing handoffs. So this should be a state? And in the handoff we
-                // signal the next state.
-            } else {
-                // Set assist level
-                uint8_t cmd[] = {0x01, 0x21, 0x34, level};
-                exchange(cmd, sizeof(cmd));
-
-#if CONFIG_ION_CU2
-                // Notify display update
-                xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT); 
+                    // TODO: Start waiting for MYSTERY BAT COMMAND 12 (with arg 0), while
+                    // doing handoffs. So this should be a state? And in the handoff we
+                    // signal the next state.
+                    levelSet = level;
+#if CONFIG_ION_CU2 || CONFIG_ION_CU3
+                    // Notify display update
+                    xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT);
 #endif
+                }
                 state = MOTOR_ON;
                 step = 0;
-            }
+            } else {
+                if(!assistOn) {
+                    // Assist on
+                    uint8_t cmd[] = {0x01, 0x20, 0x32};
+                    exchange(cmd, sizeof(cmd));
+                    assistOn = true;
+
+                    // TODO: Start waiting for MYSTERY BAT COMMAND 12 (with arg 1), while
+                    // doing handoffs. So this should be a state? And in the handoff we
+                    // signal the next state.
+                } else {
+                    // Set assist level
+                    uint8_t cmd[] = {0x01, 0x21, 0x34, level};
+                    exchange(cmd, sizeof(cmd));
+
+                    levelSet = level;
+#if CONFIG_ION_CU2 || CONFIG_ION_CU3
+                    // Notify display update
+                    xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT);
+#endif
+                    state = MOTOR_ON;
+                    step = 0;
+                }
+            }            
         } else if(state == TURN_MOTOR_OFF) {
             if(assistOn) {
                 // Assist off
@@ -490,11 +630,7 @@ static void my_task(void *pvParameter) {
                 // Really still need to come up with a good setup here. Does the actual system even turn off the motor? Probably only after a while in '0' assist state.
                 // And depending on wether we're moving (by motor update km/h messages)?
                 state = TURN_MOTOR_ON;
-#if CONFIG_ION_CU2
-                step = 0;
-#else
-                step = 5;
-#endif
+                step = TURN_MOTOR_ON_START_STEP;
             }
         }
 

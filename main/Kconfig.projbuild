@@ -11,6 +11,10 @@ menu "Sparta Ion Config"
         bool "Enable CU2 display support"
         default y
 
+    config ION_CU3
+        bool "Enable CU3 display support"
+        default n
+
     config ION_UART
         int "UART number connected to bus"
         default 2
