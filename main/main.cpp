@@ -370,6 +370,7 @@ static void my_task(void *pvParameter) {
         // Use 'step' for calibrate, double check logic of all states.
         // How do we go back to IDLE state? (timeout when level = 0?)
         // More use of timeouts
+        // See if we really need 8k stack (copying message structure a lot I guess)
 
         // TODO:
         // Instead .. ? can we wait on event bits AND rx?
@@ -639,7 +640,7 @@ extern "C" void app_main() {
 
     controlEventGroup = xEventGroupCreate();
 
-    xTaskCreatePinnedToCore(my_task, "my_task", 4096, NULL, 5, NULL, SECOND_CPU);
+    xTaskCreatePinnedToCore(my_task, "my_task", 4096 * 2, NULL, 5, NULL, SECOND_CPU);
 
     // TODO: TO TASK
     gpio_config_t io_conf = {};
