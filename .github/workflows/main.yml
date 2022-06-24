@@ -14,11 +14,16 @@ jobs:
     strategy:
       matrix:
         target: [esp32, esp32c3]
+        display: [cu2, cu3]
     steps:
     - name: Checkout repo
       uses: actions/checkout@v3
       with:
         submodules: 'recursive'
+
+    # We should be able to use SDKCONFIG_DEFAULTS, but it seems to be broken, this also works.
+    - run: cat sdkconfig.${{ matrix.display }} >> sdkconfig.defaults
+
     - name: esp-idf build
       uses: espressif/esp-idf-ci-action@v1
       with:
@@ -28,8 +33,9 @@ jobs:
 
     - uses: actions/upload-artifact@v3
       with:
-        name: firmware
+        name: firmware-${{ matrix.target }}-${{ matrix.display }}
         path: |
           ${{ github.workspace }}/build/bootloader/bootloader.bin
           ${{ github.workspace }}/build/partition_table/partition-table.bin
           ${{ github.workspace }}/build/ion1-nowifi.bin
+          ${{ github.workspace }}/sdkconfig
