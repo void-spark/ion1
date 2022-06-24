@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         submodules: 'recursive'
     - name: esp-idf build
@@ -22,3 +22,11 @@ jobs:
         esp_idf_version: latest
         target: esp32
         path: ''
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: firmware
+        path: |
+          ${{ github.workspace }}/build/bootloader/bootloader.bin
+          ${{ github.workspace }}/build/partition_table/partition-table.bin
+          ${{ github.workspace }}/build/ion1-nowifi.bin
