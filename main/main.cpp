@@ -158,10 +158,11 @@ static void initBlink() {
     xTaskCreatePinnedToCore(blinkTask, "blinkTask", 2048, NULL, 5, NULL, FIRST_CPU);
 }
 
-#if CONFIG_ION_LIGHT
 static void setLight(bool value) {
     lightOn = value;
+#if CONFIG_ION_LIGHT
     gpio_set_level(LIGHT_PIN, value ? LIGHT_ON : LIGHT_OFF);
+#endif
 }
 
 static void toggleLight() {
@@ -169,6 +170,7 @@ static void toggleLight() {
 }
 
 static void initLight() {
+#if CONFIG_ION_LIGHT
     gpio_config_t io_conf = {};
     io_conf.pin_bit_mask = BIT64(LIGHT_PIN);
     io_conf.mode = GPIO_MODE_OUTPUT;
@@ -176,10 +178,10 @@ static void initLight() {
     io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
     io_conf.intr_type = GPIO_INTR_DISABLE;
     ESP_ERROR_CHECK(gpio_config(&io_conf));
+#endif
 
     setLight(false);
 }
-#endif
 
 #if CONFIG_ION_RELAY
 static void setRelay(bool value) {
@@ -722,9 +724,7 @@ extern "C" void app_main() {
     initRelay();
 #endif
 
-#if CONFIG_ION_LIGHT
     initLight();
-#endif
 
     // TODO: TO TASK
     initBlink();
