@@ -64,6 +64,16 @@ static const int IGNORE_HELD_BIT = BIT6;
     #define TURN_MOTOR_ON_START_STEP 5
 #endif
 
+#if CONFIG_ION_LIGHT
+    #define LIGHT_PIN ((gpio_num_t)CONFIG_ION_LIGHT_PIN)
+    #if CONFIG_ION_LIGHT_PIN_INVERTED
+        #define LIGHT_ON 0
+        #define LIGHT_OFF 1
+    #else
+        #define LIGHT_ON 1
+        #define LIGHT_OFF 0
+    #endif
+#endif
 
 static EventGroupHandle_t controlEventGroup;
 
@@ -123,6 +133,43 @@ static void blinkTask(void *pvParameter) {
     vTaskDelete(NULL);
 }
 
+static void initBlink() {
+    gpio_config_t io_conf = {};
+    io_conf.pin_bit_mask = BIT64(LED_BUILTIN);
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
+
+    blinkQueue = xQueueCreate(3, sizeof(blinkType));
+
+    xTaskCreatePinnedToCore(blinkTask, "blinkTask", 2048, NULL, 5, NULL, FIRST_CPU);
+}
+
+#if CONFIG_ION_LIGHT
+static void initLight() {
+    gpio_config_t io_conf = {};
+    io_conf.pin_bit_mask = BIT64(LIGHT_PIN);
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
+
+    gpio_set_level(LIGHT_PIN, LIGHT_OFF);
+}
+
+static void setLight(bool value) {
+    lightOn = value;
+    gpio_set_level(LIGHT_PIN, value ? LIGHT_ON : LIGHT_OFF);
+}
+
+static void toggleLight() {
+    setLight(!lightOn);
+}
+#endif
+
 static uint16_t toUint16(uint8_t *buffer, size_t offset) { 
     return ((uint16_t)buffer[offset] << 8) | ((uint16_t)buffer[offset + 1] << 0); 
 }
@@ -169,7 +216,7 @@ static handleMotorMessageResult handleMotorMessage() {
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == 0x1c) {
         // Set light
-        lightOn = message.payload[0];
+        setLight(message.payload[0]);
         writeMessage(cmdResp(message.source, MSG_BMS, message.command));
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == 0x1d) {
@@ -384,7 +431,7 @@ static void my_task(void *pvParameter) {
         const bool lightLongPress = (buttonBits & BUTTON_LIGHT_LONG_PRESS_BIT) != 0;
 
         if(lightShortPress) {
-            lightOn = !lightOn;
+            toggleLight();
 #if CONFIG_ION_CU2 || CONFIG_ION_CU3
             xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT); 
 #endif
@@ -642,19 +689,12 @@ extern "C" void app_main() {
 
     xTaskCreatePinnedToCore(my_task, "my_task", 4096 * 2, NULL, 5, NULL, SECOND_CPU);
 
+#if CONFIG_ION_LIGHT
+    initLight();
+#endif
     // TODO: TO TASK
-    gpio_config_t io_conf = {};
-    io_conf.pin_bit_mask = BIT64(LED_BUILTIN);
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    ESP_ERROR_CHECK(gpio_config(&io_conf));
-
-    blinkQueue = xQueueCreate(3, sizeof(blinkType));
-
-    xTaskCreatePinnedToCore(blinkTask, "blinkTask", 2048, NULL, 5, NULL, FIRST_CPU);
-
+    initBlink();
+    
 #if CONFIG_ION_BUTTON
     bool held = false;
     button_event_t ev;

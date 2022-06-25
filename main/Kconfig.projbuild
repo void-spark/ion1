@@ -7,6 +7,18 @@ menu "Sparta Ion Config"
         int "Led pin"
         default 2
 
+    config ION_LIGHT
+        bool "Enable pin for controlling light"
+        default n
+
+    config ION_LIGHT_PIN
+        int "Light pin"
+        default 33
+
+    config ION_LIGHT_PIN_INVERTED
+        bool "Light pin low for on"
+        default n
+
     config ION_CU2
         bool "Enable CU2 display support"
         default y
