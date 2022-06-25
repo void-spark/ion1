@@ -19,6 +19,18 @@ menu "Sparta Ion Config"
         bool "Light pin low for on"
         default n
 
+    config ION_RELAY
+        bool "Enable pin for controlling motor power"
+        default n
+
+    config ION_RELAY_PIN
+        int "Motor relay pin"
+        default 32
+
+    config ION_RELAY_PIN_INVERTED
+        bool "Motor relay pin low for on"
+        default n
+
     config ION_CU2
         bool "Enable CU2 display support"
         default y

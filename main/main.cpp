@@ -75,6 +75,17 @@ static const int IGNORE_HELD_BIT = BIT6;
     #endif
 #endif
 
+#if CONFIG_ION_RELAY
+    #define RELAY_PIN ((gpio_num_t)CONFIG_ION_RELAY_PIN)
+    #if CONFIG_ION_RELAY_PIN_INVERTED
+        #define RELAY_ON 0
+        #define RELAY_OFF 1
+    #else
+        #define RELAY_ON 1
+        #define RELAY_OFF 0
+    #endif
+#endif
+
 static EventGroupHandle_t controlEventGroup;
 
 enum control_state { IDLE, START_CALIBRATE, TURN_MOTOR_ON, MOTOR_ON, SET_ASSIST_LEVEL, TURN_MOTOR_OFF, MOTOR_OFF };
@@ -148,6 +159,15 @@ static void initBlink() {
 }
 
 #if CONFIG_ION_LIGHT
+static void setLight(bool value) {
+    lightOn = value;
+    gpio_set_level(LIGHT_PIN, value ? LIGHT_ON : LIGHT_OFF);
+}
+
+static void toggleLight() {
+    setLight(!lightOn);
+}
+
 static void initLight() {
     gpio_config_t io_conf = {};
     io_conf.pin_bit_mask = BIT64(LIGHT_PIN);
@@ -157,16 +177,25 @@ static void initLight() {
     io_conf.intr_type = GPIO_INTR_DISABLE;
     ESP_ERROR_CHECK(gpio_config(&io_conf));
 
-    gpio_set_level(LIGHT_PIN, LIGHT_OFF);
+    setLight(false);
+}
+#endif
+
+#if CONFIG_ION_RELAY
+static void setRelay(bool value) {
+    gpio_set_level(RELAY_PIN, value ? RELAY_ON : RELAY_OFF);
 }
 
-static void setLight(bool value) {
-    lightOn = value;
-    gpio_set_level(LIGHT_PIN, value ? LIGHT_ON : LIGHT_OFF);
-}
+static void initRelay() {
+    gpio_config_t io_conf = {};
+    io_conf.pin_bit_mask = BIT64(RELAY_PIN);
+    io_conf.mode = GPIO_MODE_OUTPUT;
+    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
 
-static void toggleLight() {
-    setLight(!lightOn);
+    setRelay(true);
 }
 #endif
 
@@ -689,9 +718,14 @@ extern "C" void app_main() {
 
     xTaskCreatePinnedToCore(my_task, "my_task", 4096 * 2, NULL, 5, NULL, SECOND_CPU);
 
+#if CONFIG_ION_RELAY
+    initRelay();
+#endif
+
 #if CONFIG_ION_LIGHT
     initLight();
 #endif
+
     // TODO: TO TASK
     initBlink();
     
