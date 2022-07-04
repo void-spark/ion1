@@ -13,6 +13,7 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "esp_spiffs.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
 #include "button.h"
 #include "bow.h"
@@ -55,15 +56,6 @@ static const int DISPLAY_UPDATE_BIT = BIT5;
 #endif
 static const int IGNORE_HELD_BIT = BIT6;
 
-
-#if CONFIG_ION_CU2
-    #define TURN_MOTOR_ON_START_STEP 0
-#elif CONFIG_ION_CU3
-    #define TURN_MOTOR_ON_START_STEP 4
-#else
-    #define TURN_MOTOR_ON_START_STEP 5
-#endif
-
 #if CONFIG_ION_LIGHT
     #define LIGHT_PIN ((gpio_num_t)CONFIG_ION_LIGHT_PIN)
     #if CONFIG_ION_LIGHT_PIN_INVERTED
@@ -90,6 +82,24 @@ static EventGroupHandle_t controlEventGroup;
 
 enum control_state { IDLE, START_CALIBRATE, TURN_MOTOR_ON, MOTOR_ON, SET_ASSIST_LEVEL, TURN_MOTOR_OFF, MOTOR_OFF };
 
+struct ion_state {
+    // The state we're in
+    control_state state;
+
+    // The step of the state we're in, most states follow a sequence of commands
+    uint8_t step;
+
+    // Is assist currently on
+    bool assistOn;
+
+    // The assist level currently active (set in the motor)
+    uint8_t levelSet;
+
+    // Whether we should do (regular) handoffs to other components
+    bool doHandoffs;
+
+};
+
 enum handleMotorMessageResult {
     // We got a handoff back, so we get to send the next message
     CONTROL_TO_US,
@@ -110,6 +120,10 @@ static uint32_t trip;
 
 // Light on/off
 static bool lightOn = false;
+
+// Motor indicates off is ready.
+static bool motorOffAck = false;
+
 
 static QueueHandle_t blinkQueue;
 
@@ -197,7 +211,7 @@ static void initRelay() {
     io_conf.intr_type = GPIO_INTR_DISABLE;
     ESP_ERROR_CHECK(gpio_config(&io_conf));
 
-    setRelay(true);
+    setRelay(false);
 }
 #endif
 
@@ -234,11 +248,12 @@ static handleMotorMessageResult handleMotorMessage() {
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 0 && message.command == 0x11) {
-        // MYSTERY BATTERY COMMAND 11
+        // MOTOR OFF STATUS UPDATE 
+        motorOffAck = true;
         writeMessage(cmdResp(message.source, MSG_BMS, message.command));
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == 0x12) {
-        // MYSTERY BATTERY COMMAND 12
+        // ASSIST ENABLED STATUS UPDATE
         writeMessage(cmdResp(message.source, MSG_BMS, message.command));
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 0 && message.command == 0x14) {
@@ -414,6 +429,226 @@ static void readTask(void *pvParameter) {
     vTaskDelete(NULL);
 }
 
+static void toTurnMotorOnState(ion_state * state) {
+    queueBlink(1, 500, 50);
+#if CONFIG_ION_RELAY
+    setRelay(true);
+#endif
+
+    state->state = TURN_MOTOR_ON;
+    state->step = 0;
+}
+
+static void toMotorOnState(ion_state * state) {
+    state->state = MOTOR_ON;
+    state->step = 0;
+}
+
+static void toSetAssistLevelState(ion_state * state) {
+    if(level == 0) {
+        queueBlink(2, 250, 50);
+    } else {
+        queueBlink(level, 100, 50);
+    }
+
+    state->state = SET_ASSIST_LEVEL;
+    state->step = 0;
+}
+
+static void toTurnMotorOffState(ion_state * state) {
+    queueBlink(2, 400, 50);
+
+    state->state = TURN_MOTOR_OFF;
+    state->step = 0;
+}
+
+static void handleTurnMotorOnState(ion_state * state) {
+
+    static uint8_t displaySerial[8] = {};
+    static uint8_t motorSlot2Serial[8] = {};
+
+#if CONFIG_ION_CU3
+    const uint8_t nextStep = 1;
+    // TODO: Update display every 1.5 second, unless already updated (from motor message)
+    if(state->step == 0) {
+        displayUpdateCu3(0, 0, 0, 0);
+    } else 
+#elif CONFIG_ION_CU2
+    const uint8_t nextStep = 5;
+    if(state->step == 0) {
+        // Button check command with a special value, maybe just resets
+        // default/display? Or sets timeout? Or initializes display 'clock'?
+        uint8_t payload[] = {0x80};
+        messageType message = {};
+        readResult result = exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x22, payload, sizeof(payload)), &message, 225 / portTICK_PERIOD_MS );
+    } else if(state->step == 1) {
+        // Update display
+        displayUpdate(false, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, true, 25, 0xccc, 0xccccc);
+    } else if(state->step == 2) {
+        // Unknown command which is always the same and always sent to the
+        // display at this point.
+        uint8_t payload[] = {0x04, 0x08};
+        exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x25, payload, sizeof(payload)));
+    } else if(state->step == 3) {
+        // First normal button check command, after this should run every 100ms.
+        buttonCheck();
+        startButtonCheck();
+    } else if(state->step == 4) {
+        // Set default display, which is shown if the display isn't updated for a bit (?)
+        displayUpdate(true, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, false, 10, 0xccc, 0xccccc);
+    } else 
+#else
+    const uint8_t nextStep = 0;
+#endif
+    if(state->step == nextStep) {
+        messageType message = {};
+        // Motor on
+        // Original BMS seems to repeat handoff till the motor responds, with 41ms between commands, but this should also work.
+        exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x30), &message, 41 / portTICK_PERIOD_MS);
+        state->doHandoffs = true;
+    } else if(state->step == nextStep + 1) {
+        // Put data, which is common after motor on, left value is unknown, right is voltage.
+        uint8_t payload[] = {0x94, 0xb0, 0x09, 0xc4, 0x14, 0xb1, 0x01, 0x14}; // PUT DATA (2500|27.6)
+        exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x09, payload, sizeof(payload)));
+#if CONFIG_ION_CU2 || CONFIG_ION_CU3
+    } else if(state->step == nextStep + 2) {
+        // Get display serial
+        messageType response = {};
+        exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x20), &response);
+        memcpy(displaySerial, response.payload, 8);
+    } else if(state->step == nextStep + 3) {
+        // Get serial progammed in motor slot 2
+        messageType response = {};
+        uint8_t payload[] = {0x40, 0x5c, 0x00};
+        exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x08, payload, sizeof(payload)), &response);
+        if(response.payload[3] == 8) {
+            memcpy(motorSlot2Serial, response.payload + 4, 8);
+        }
+        if(memcmp(displaySerial, motorSlot2Serial, 8) == 0) {
+            toMotorOnState(state);
+            return;
+        }
+    } else if(state->step == nextStep + 4) {
+        // Program serial in motor slot 2
+        uint8_t payload[] = {0x40, 0x5c, 0x00, 0x08, 0x08, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+        memcpy(payload + 5, displaySerial, 8);
+        messageType response = {};
+        exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x09, payload, sizeof(payload)), &response);
+#endif
+        toMotorOnState(state);
+        return;
+    }
+    state->step++;
+}
+
+static void handleMotorOnState(ion_state * state, bool modeShortPress, bool lightLongPress) {
+
+    static int64_t lastMoving = 0;
+    int64_t now = esp_timer_get_time();
+
+    if(state->step == 0 || speed > 0 || state->levelSet != 0) {
+        lastMoving = now;
+    }
+
+    if(state->step == 0) {
+        state->step++;
+    }
+
+    if(now -lastMoving > 10 * 1000 * 1000 ) {
+        toTurnMotorOffState(state);
+        return;
+    }
+
+    // Handle calibration 'request' from a CU2 display, holding the light button while level is 0 and light is off.
+    if(level == 0x00 && lightOn == false && lightLongPress) {
+        queueBlink(10, 100, 100);
+        state->state = START_CALIBRATE;
+        return;
+    } 
+
+    // Handle level change request from CU2 display, by pressing mode button.
+    if(modeShortPress) {
+        level = (level + 1) % 4;
+    }
+
+    if(level != state->levelSet) {
+        toSetAssistLevelState(state);
+        return;
+    }            
+}
+
+static void handleSetAssistLevelState(ion_state * state) {
+    if(level == 0) {
+        if(state->assistOn) {
+            // Assist off
+            exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x33));
+            state->assistOn = false;
+
+            // TODO: Start waiting for MYSTERY BAT COMMAND 12 (with arg 0), while
+            // doing handoffs. So this should be a state? And in the handoff we
+            // signal the next state.
+            state->levelSet = level;
+#if CONFIG_ION_CU2 || CONFIG_ION_CU3
+            // Notify display update
+            xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT);
+#endif
+        }
+        toMotorOnState(state);
+    } else {
+        if(!state->assistOn) {
+            // Assist on
+            exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x32));
+            state->assistOn = true;
+
+            // TODO: Start waiting for MYSTERY BAT COMMAND 12 (with arg 1), while
+            // doing handoffs. So this should be a state? And in the handoff we
+            // signal the next state.
+        } else {
+            // Set assist level
+            uint8_t payload[] = {level};
+            exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x34, payload, sizeof(payload)));
+
+            state->levelSet = level;
+#if CONFIG_ION_CU2 || CONFIG_ION_CU3
+            // Notify display update
+            xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT);
+#endif
+        toMotorOnState(state);
+        }
+    }     
+}
+
+static void handleTurnMotorOffState(ion_state * state) {
+    if(state->assistOn) {
+        // Assist off
+        exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x33));
+        state->assistOn = false;
+
+        // TODO: Start waiting for MYSTERY BAT COMMAND 12 (with arg 0), while
+        // doing handoffs. So this should be a state? And in the handoff we
+        // signal the next state.
+    } else {
+        if(state->step == 0) {
+            motorOffAck = false;
+            // Motor off
+            uint8_t payload[] = {0x00};
+            exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x31, payload, sizeof(payload)));
+            // NOTE: XHP after this will stop responding to handoff messages after some time (and a put data message)
+
+            state->step++;
+        } else if (state->step == 1)
+            if(motorOffAck) {
+#if CONFIG_ION_RELAY
+                setRelay(false);
+#endif
+
+                queueBlink(4, 100, 300);
+                state->state = MOTOR_OFF;
+                state->step = 0;
+            }
+    }
+}
+
 static void my_task(void *pvParameter) {
 
     init_spiffs();
@@ -431,16 +666,13 @@ static void my_task(void *pvParameter) {
     );
 #endif
 
-    // The state we're in
-    control_state state = IDLE;
-    // The step of the state we're in, most states follow a sequence of commands
-    uint8_t step = 0;
-    bool motorHandoffs = false;
-    bool assistOn = false;
-    uint8_t levelSet = level;
-    uint8_t displaySerial[8] = {};
-    uint8_t motorSlot2Serial[8] = {};
-
+    ion_state state = {
+        .state = IDLE,
+        .step = 0,
+        .assistOn = false,
+        .levelSet = level,
+        .doHandoffs = false
+    };
 
     while(true) {
 
@@ -487,125 +719,26 @@ static void my_task(void *pvParameter) {
 #endif
         } else 
 #endif
-        if(state == IDLE) {
+        if(state.state == IDLE) {
             if(modeShortPress) {
-                queueBlink(1, 800, 200);
-                state = TURN_MOTOR_ON;
-                step = TURN_MOTOR_ON_START_STEP;
+                toTurnMotorOnState(&state);
             } else {
                 messageType message = {};
                 readResult result = readMessage(&message, 50 / portTICK_PERIOD_MS );
                 if(result == MSG_WAKEUP) {
                     ESP_LOGI(TAG, "Wakeup!");
                     xEventGroupSetBits(controlEventGroup, IGNORE_HELD_BIT); 
-                    state = TURN_MOTOR_ON;
-                    step = TURN_MOTOR_ON_START_STEP;
+                    toTurnMotorOnState(&state);
                 } else if(result == MSG_OK){
                     ESP_LOGI(TAG, "Incoming: Tgt:%d, Src:%d, Type:%d, Command:%d", message.target, message.source, message.type, message.command);
                     ESP_LOG_BUFFER_HEX(TAG, message.payload, message.payloadSize);
                 }
             }
-        } else if(state == TURN_MOTOR_ON) {
-#if CONFIG_ION_CU3
-            // TODO: Update display every 1.5 second, unless already updated (from motor message)
-            if(step == 4) {
-                displayUpdateCu3(0, 0, 0, 0);
-                step++;
-            } else 
-#endif
-#if CONFIG_ION_CU2
-            if(step == 0) {
-                // Button check command with a special value, maybe just resets
-                // default/display? Or sets timeout? Or initializes display 'clock'?
-                uint8_t payload[] = {0x80};
-                messageType message = {};
-                readResult result = exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x22, payload, sizeof(payload)), &message, 225 / portTICK_PERIOD_MS );
-                step++;
-            } else if(step == 1) {
-                // Update display
-                displayUpdate(false, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, true, 25, 0xccc, 0xccccc);
-                step++;
-            } else if(step == 2) {
-                // Unknown command which is always the same and always sent to the
-                // display at this point.
-                uint8_t payload[] = {0x04, 0x08};
-                exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x25, payload, sizeof(payload)));
-                step++;
-            } else if(step == 3) {
-                // First normal button check command, after this should run every 100ms.
-                buttonCheck();
-                startButtonCheck();
-                step++;
-            } else if(step == 4) {
-                // Set default display, which is shown if the display isn't updated for a bit (?)
-                displayUpdate(true, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, false, 10, 0xccc, 0xccccc);
-                step++;
-            } else 
-#endif
-            if(step == 5) {
-                messageType message = {};
-                // Motor on
-                // Original BMS seems to repeat handoff till the motor responds, with 41ms between commands, but this should also work.
-                exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x30), &message, 41 / portTICK_PERIOD_MS);
-                motorHandoffs = true;
-                step++;
-            } else if(step == 6) {
-                // Put data, which is common after motor on, left value is unknown, right is voltage.
-                uint8_t payload[] = {0x94, 0xb0, 0x09, 0xc4, 0x14, 0xb1, 0x01, 0x14}; // PUT DATA (2500|27.6)
-                exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x09, payload, sizeof(payload)));
-#if CONFIG_ION_CU2 || CONFIG_ION_CU3
-                step++;
-            } else if(step == 7) {
-                // Get display serial
-                messageType response = {};
-                exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x20), &response);
-                memcpy(displaySerial, response.payload, 8);
-                step++;
-            } else if(step == 8) {
-                // Get serial progammed in motor slot 2
-                messageType response = {};
-                uint8_t payload[] = {0x40, 0x5c, 0x00};
-                exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x08, payload, sizeof(payload)), &response);
-                if(response.payload[3] == 8) {
-                    memcpy(motorSlot2Serial, response.payload + 4, 8);
-                }
-                if(memcmp(displaySerial, motorSlot2Serial, 8) == 0) {
-                    state = MOTOR_ON;
-                    step = 0;
-                } else {
-                    step++;
-                }
-            } else if(step == 9) {
-                // Program serial in motor slot 2
-                uint8_t payload[] = {0x40, 0x5c, 0x00, 0x08, 0x08, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-                memcpy(payload + 5, displaySerial, 8);
-                messageType response = {};
-                exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x09, payload, sizeof(payload)), &response);
-#endif
-                state = MOTOR_ON;
-                step = 0;
-            }
-        } else if(state == MOTOR_ON) {
-            if(level != levelSet) {
-                state = SET_ASSIST_LEVEL;
-                step = 0;
-            } else if(level == 0x00 && lightOn == false && lightLongPress) {
-                queueBlink(10, 100, 100);
-                state = START_CALIBRATE;
-            } else if(modeShortPress) {
-                if(level <= 0x02) {
-                    queueBlink(level + 1, 250, 200);
-                    level++;
-                    state = SET_ASSIST_LEVEL;
-                    step = 0;
-                } else if(level == 0x03) {
-                    queueBlink(4, 400, 200);
-                    level = 0x00;
-                    state = TURN_MOTOR_OFF;
-                    step = 0;
-                }
-            }
-        } else if(state == START_CALIBRATE) {
+        } else if(state.state == TURN_MOTOR_ON) {
+            handleTurnMotorOnState(&state);
+        } else if(state.state == MOTOR_ON) {
+            handleMotorOnState(&state, modeShortPress, lightLongPress);
+        } else if(state.state == START_CALIBRATE) {
             // Start calibration
             exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x35));
             handoff();
@@ -616,89 +749,28 @@ static void my_task(void *pvParameter) {
             handoff();
 
             // BMS actually stops listening here, it ignores (some?) motor messages.
-            state = MOTOR_ON;
-        } else if(state == SET_ASSIST_LEVEL) {
-            if(level == 0) {
-                if(assistOn) {
-                    // Assist off
-                    exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x33));
-                    assistOn = false;
-
-                    // TODO: Start waiting for MYSTERY BAT COMMAND 12 (with arg 0), while
-                    // doing handoffs. So this should be a state? And in the handoff we
-                    // signal the next state.
-                    levelSet = level;
-#if CONFIG_ION_CU2 || CONFIG_ION_CU3
-                    // Notify display update
-                    xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT);
-#endif
-                }
-                state = MOTOR_ON;
-                step = 0;
-            } else {
-                if(!assistOn) {
-                    // Assist on
-                    exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x32));
-                    assistOn = true;
-
-                    // TODO: Start waiting for MYSTERY BAT COMMAND 12 (with arg 1), while
-                    // doing handoffs. So this should be a state? And in the handoff we
-                    // signal the next state.
-                } else {
-                    // Set assist level
-                    uint8_t payload[] = {level};
-                    exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x34, payload, sizeof(payload)));
-
-                    levelSet = level;
-#if CONFIG_ION_CU2 || CONFIG_ION_CU3
-                    // Notify display update
-                    xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT);
-#endif
-                    state = MOTOR_ON;
-                    step = 0;
-                }
-            }            
-        } else if(state == TURN_MOTOR_OFF) {
-            if(assistOn) {
-                // Assist off
-                exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x33));
-                assistOn = false;
-
-                // TODO: Start waiting for MYSTERY BAT COMMAND 12 (with arg 0), while
-                // doing handoffs. So this should be a state? And in the handoff we
-                // signal the next state.
-            } else {
-                // Motor off
-                uint8_t payload[] = {0x00};
-                exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x31, payload, sizeof(payload)));
-                // NOTE: XHP after this will stop responding to handoff messages after some time (and a put data message)
-                // TODO: Maybe wait for cmd 11? (No cmd 11 from XHP?)
-                state = MOTOR_OFF;
-                step = 0;
-            }
-        } else if(state == MOTOR_OFF) {
+            toMotorOnState(&state);
+        } else if(state.state == SET_ASSIST_LEVEL) {
+            handleSetAssistLevelState(&state);       
+        } else if(state.state == TURN_MOTOR_OFF) {
+            handleTurnMotorOffState(&state);
+        } else if(state.state == MOTOR_OFF) {
             // TODO: Do we want this, which still does handoff messages, or do we want
             // to stop listening to motor? Normally motor is powered off and we keep
             // sending handoffs for a while..
             if(modeShortPress) {
-                // TODO: Previously I made the short press sticky, so we'd leave IDLE straight away
-                // state = IDLE;
-                // TODO: We're still chatting, so motor is responsive, but need to turn it back on since we did tell it to turn off..
-                // Really still need to come up with a good setup here. Does the actual system even turn off the motor? Probably only after a while in '0' assist state.
-                // And depending on wether we're moving (by motor update km/h messages)?
-                state = TURN_MOTOR_ON;
-                step = TURN_MOTOR_ON_START_STEP;
+                toTurnMotorOnState(&state);
             }
         }
 
-        if(motorHandoffs) {
+        if(state.doHandoffs) {
             if(!handoff()) {
                 // Timeout, assume motor turned off.
 #if CONFIG_ION_CU2
                 stopButtonCheck();
 #endif
-                motorHandoffs = false;
-                state = IDLE;
+                state.doHandoffs = false;
+                state.state = IDLE;
             }
         }
     }
