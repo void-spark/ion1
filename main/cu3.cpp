@@ -22,6 +22,10 @@ void showStateCu3(uint8_t level, bool screenOn, bool lightOn, uint16_t speed, ui
  */
 void displayUpdateCu3(display_type type, bool screen, bool light, bool battery2, uint8_t assist, uint16_t speed, uint32_t trip1, uint32_t trip2) {
     uint8_t byte0 = type;
+    if(type == DSP_SCREEN && assist > 0) {
+        // Not sure why, but the original seems to do this.
+        byte0 = 0x03;
+    }
     uint8_t byte2 = (light ? 0x01 : 0x00) | (battery2 ? 0x04 : 0x00) | (screen ? 0x08 : 0x00);
 
     uint8_t payload[] = {byte0, assist, byte2, 

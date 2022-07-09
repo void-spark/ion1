@@ -431,7 +431,6 @@ static void handleTurnMotorOnState(ion_state * state) {
     const uint8_t nextStep = 1;
     // TODO: Update display every 1.5 second, unless already updated (from motor message)
     if(state->step == 0) {
-        // Actually, the first message has usually byte0 = 3, but this seems to work.
         displayUpdateCu3(DSP_SCREEN, state->displayOn, true, false, 0, 0, 0, 0);
     } else 
 #elif CONFIG_ION_CU2
