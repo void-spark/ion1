@@ -27,10 +27,10 @@ jobs:
         submodules: 'recursive'
 
     # We should be able to use SDKCONFIG_DEFAULTS, but it seems to be broken, this also works.
-    - run: cat sdkconfig.${{ matrix.display }} >> sdkconfig.defaults
+    - run: cat sdkconfig.${{ matrix.display }} >> sdkconfig.defaults.${{ matrix.target }}
 
     - if: ${{ matrix.custom != 'std' }}
-      run: cat sdkconfig.${{ matrix.custom }} >> sdkconfig.defaults
+      run: cat sdkconfig.${{ matrix.custom }} >> sdkconfig.defaults.${{ matrix.target }}
 
     - name: esp-idf build
       uses: espressif/esp-idf-ci-action@v1
