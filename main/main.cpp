@@ -54,6 +54,7 @@ static const int CHECK_BUTTON_BIT = BIT4;
 static const int DISPLAY_UPDATE_BIT = BIT5;
 #endif
 static const int IGNORE_HELD_BIT = BIT6;
+static const int WAKEUP_BIT = BIT7;
 
 #if CONFIG_ION_LIGHT
     #define LIGHT_PIN ((gpio_num_t)CONFIG_ION_LIGHT_PIN)
@@ -87,6 +88,9 @@ struct ion_state {
 
     // The step of the state we're in, most states follow a sequence of commands
     uint8_t step;
+
+    // Should the display be 'on' ('off' is logo for CU3).
+    bool displayOn;
 
     // Is assist currently on
     bool assistOn;
@@ -210,7 +214,8 @@ static handleMotorMessageResult handleMotorMessage() {
         writeMessage(cmdResp(message.source, MSG_BMS, message.command));
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 0 && message.command == 0x14) {
-        // MYSTERY BATTERY COMMAND 14
+        // Wakeup for BMS, display/system was asleep, a user pressed a button, turn on motor and display.
+        xEventGroupSetBits(controlEventGroup, WAKEUP_BIT);                     
         writeMessage(cmdResp(message.source, MSG_BMS, message.command));
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == 0x1c) {
@@ -383,6 +388,7 @@ static void readTask(void *pvParameter) {
 }
 
 static void toTurnMotorOnState(ion_state * state) {
+    state->displayOn = true;
     queueBlink(1, 500, 50);
 #if CONFIG_ION_RELAY
     setRelay(true);
@@ -409,6 +415,7 @@ static void toSetAssistLevelState(ion_state * state) {
 }
 
 static void toTurnMotorOffState(ion_state * state) {
+    state->displayOn = false;
     queueBlink(2, 400, 50);
 
     state->state = TURN_MOTOR_OFF;
@@ -424,7 +431,8 @@ static void handleTurnMotorOnState(ion_state * state) {
     const uint8_t nextStep = 1;
     // TODO: Update display every 1.5 second, unless already updated (from motor message)
     if(state->step == 0) {
-        displayUpdateCu3(0, 0, 0, 0);
+        // Actually, the first message has usually byte0 = 3, but this seems to work.
+        displayUpdateCu3(DSP_SCREEN, state->displayOn, true, false, 0, 0, 0, 0);
     } else 
 #elif CONFIG_ION_CU2
     const uint8_t nextStep = 5;
@@ -622,6 +630,7 @@ static void my_task(void *pvParameter) {
     ion_state state = {
         .state = IDLE,
         .step = 0,
+        .displayOn = false,
         .assistOn = false,
         .levelSet = level,
         .doHandoffs = false
@@ -640,11 +649,13 @@ static void my_task(void *pvParameter) {
         // Serial should lead, buttons are uncommon.
         // Can we generate a eventgroup bit from uart?
 
-        EventBits_t buttonBits = xEventGroupWaitBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT | BUTTON_MODE_LONG_PRESS_BIT | BUTTON_LIGHT_SHORT_PRESS_BIT | BUTTON_LIGHT_LONG_PRESS_BIT, true, false, 0);
+        EventBits_t buttonBits = xEventGroupWaitBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT | BUTTON_MODE_LONG_PRESS_BIT | BUTTON_LIGHT_SHORT_PRESS_BIT | BUTTON_LIGHT_LONG_PRESS_BIT | WAKEUP_BIT, true, false, 0);
         const bool modeShortPress = (buttonBits & BUTTON_MODE_SHORT_PRESS_BIT) != 0;
         const bool modeLongPress = (buttonBits & BUTTON_MODE_LONG_PRESS_BIT) != 0;
         const bool lightShortPress = (buttonBits & BUTTON_LIGHT_SHORT_PRESS_BIT) != 0;
         const bool lightLongPress = (buttonBits & BUTTON_LIGHT_LONG_PRESS_BIT) != 0;
+        const bool wakeup = (buttonBits & WAKEUP_BIT) != 0;
+        
 
         if(lightShortPress) {
             toggleLight();
@@ -668,7 +679,7 @@ static void my_task(void *pvParameter) {
 #if CONFIG_ION_CU2
             showState(level, lightOn, speed, trip);
 #elif CONFIG_ION_CU3
-            showStateCu3(level, lightOn, speed, trip);
+            showStateCu3(level, state.displayOn, lightOn, speed, trip);
 #endif
         } else 
 #endif
@@ -708,17 +719,15 @@ static void my_task(void *pvParameter) {
         } else if(state.state == TURN_MOTOR_OFF) {
             handleTurnMotorOffState(&state);
         } else if(state.state == MOTOR_OFF) {
-            // TODO: Do we want this, which still does handoff messages, or do we want
-            // to stop listening to motor? Normally motor is powered off and we keep
-            // sending handoffs for a while..
-            if(modeShortPress) {
+            // Motor is off, but we may still get handoff messages from it, or the display (CU3).
+            if(modeShortPress || wakeup) {
                 toTurnMotorOnState(&state);
             }
         }
 
         if(state.doHandoffs) {
             if(!handoff()) {
-                // Timeout, assume motor turned off.
+                // Timeout, assume motor turned off. CU3 will keep chatting, so no timeout then.
 #if CONFIG_ION_CU2
                 stopButtonCheck();
 #endif
