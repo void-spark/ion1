@@ -272,7 +272,14 @@ static handleMotorMessageResult handleMotorMessage() {
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == 0x08 && message.payload[1] == 0x8e) {
         // GET DATA 088e 08:8e(Time)
-        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x00, 0x00, 0xfb, 0xe2};
+
+        int64_t seconds = esp_timer_get_time() / (1000 * 1000);
+        uint8_t byte0 = (seconds >> 24) & 0xff;
+        uint8_t byte1 = (seconds >> 16) & 0xff; 
+        uint8_t byte2 = (seconds >> 8) & 0xff;
+        uint8_t byte3 = seconds & 0xff;
+
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], byte0, byte1, byte2, byte3};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == 0x08 && message.payload[1] == 0x94) {
