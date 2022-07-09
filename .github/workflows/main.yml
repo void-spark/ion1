@@ -15,6 +15,7 @@ jobs:
       matrix:
         target: [esp32, esp32c3]
         display: [cu2, cu3]
+        custom: [std]
         include:
           - target: esp32c3
             display: cu3
@@ -28,7 +29,7 @@ jobs:
     # We should be able to use SDKCONFIG_DEFAULTS, but it seems to be broken, this also works.
     - run: cat sdkconfig.${{ matrix.display }} >> sdkconfig.defaults
 
-    - if: ${{ matrix.custom }}
+    - if: ${{ matrix.custom != 'std' }}
       run: cat sdkconfig.${{ matrix.custom }} >> sdkconfig.defaults
 
     - name: esp-idf build
@@ -40,7 +41,7 @@ jobs:
 
     - uses: actions/upload-artifact@v3
       with:
-        name: firmware-${{ matrix.target }}-${{ matrix.display }}${{ matrix.custom }}
+        name: firmware-${{ matrix.target }}-${{ matrix.display }}-${{ matrix.custom }}
         path: |
           ${{ github.workspace }}/build/bootloader/bootloader.bin
           ${{ github.workspace }}/build/partition_table/partition-table.bin
