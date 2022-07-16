@@ -59,7 +59,7 @@ void buttonCheck() {
     uint8_t payload[] = {count};
 
     messageType response = {};
-    readResult result = exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x22, payload, sizeof(payload)), &response);
+    readResult result = exchange(cmdReq(MSG_DISPLAY, MSG_BMS, CMD_BUTTON_POLL, payload, sizeof(payload)), &response);
 
     // The first is '00','01','02' or '03', depending on whether the top, bottom, or both buttons are presse
 

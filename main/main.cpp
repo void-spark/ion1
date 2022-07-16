@@ -55,6 +55,7 @@ static const int DISPLAY_UPDATE_BIT = BIT5;
 #endif
 static const int IGNORE_HELD_BIT = BIT6;
 static const int WAKEUP_BIT = BIT7;
+static const int CALIBRATE_BIT = BIT8;
 
 #if CONFIG_ION_LIGHT
     #define LIGHT_PIN ((gpio_num_t)CONFIG_ION_LIGHT_PIN)
@@ -204,46 +205,45 @@ static handleMotorMessageResult handleMotorMessage() {
         uint8_t payload[] = {0x02, 0x02};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 0 && message.command == 0x11) {
-        // MOTOR OFF STATUS UPDATE 
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 0 && message.command == CMD_BAT_STATUS_MOTOR_OFF) {
         motorOffAck = true;
         writeMessage(cmdResp(message.source, MSG_BMS, message.command));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == 0x12) {
-        // ASSIST ENABLED STATUS UPDATE
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == CMD_BAT_STATUS_ASSIST) {
         writeMessage(cmdResp(message.source, MSG_BMS, message.command));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 0 && message.command == 0x14) {
-        // Wakeup for BMS, display/system was asleep, a user pressed a button, turn on motor and display.
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 0 && message.command == CMD_BAT_WAKEUP) {
         xEventGroupSetBits(controlEventGroup, WAKEUP_BIT);                     
         writeMessage(cmdResp(message.source, MSG_BMS, message.command));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == 0x1c) {
-        // Set light
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == CMD_BAT_CALIBRATE) {
+        xEventGroupSetBits(controlEventGroup, CALIBRATE_BIT);                     
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == CMD_BAT_SET_LIGHT) {
         setLight(message.payload[0]);
         writeMessage(cmdResp(message.source, MSG_BMS, message.command));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == 0x1d) {
-        // Set assist
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == CMD_BAT_SET_ASSIST_LEVEL) {
         level = message.payload[0];
         writeMessage(cmdResp(message.source, MSG_BMS, message.command));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == 0x08 && message.payload[1] == 0x18) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x18) {
         // GET DATA 1418 14:18(Battery level)
         uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x1e, 0xb5};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 4 && message.command == 0x08 && message.payload[1] == 0x18 && message.payload[3] == 0x1a) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 4 && message.command == CMD_GET_DATA && message.payload[1] == 0x18 && message.payload[3] == 0x1a) {
         // GET DATA 9418141a 14:18(Battery level) 14:1a(Max battery level)
         uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x1e, 0xb7, message.payload[2], message.payload[3], 0x1f, 0x53};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == 0x08 && message.payload[1] == 0x2a) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x2a) {
         // GET DATA 002a 00:2a(Unknown)
         uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x01};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 4 && message.command == 0x08 && message.payload[1] == 0x38 && message.payload[3] == 0x3a) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 4 && message.command == CMD_GET_DATA && message.payload[1] == 0x38 && message.payload[3] == 0x3a) {
         // GET DATA 9438283a 14:38(Calibration A) 28:3a(Calibration B)
         uint8_t payload[] = {0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // Data (last 10 bytes) to be replaced
 
@@ -265,12 +265,17 @@ static handleMotorMessageResult handleMotorMessage() {
 
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == 0x08 && message.payload[1] == 0x80) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x3b) {
+        // GET DATA 083b 08:3b(Distance to maintenance)
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x00, 0x01, 0xE2, 0x08};
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x80) {
         // GET DATA 0880 08:80(Total distance)
         uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x00, 0x11, 0xd4, 0xcd};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == 0x08 && message.payload[1] == 0x8e) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x8e) {
         // GET DATA 088e 08:8e(Time)
 
         int64_t seconds = esp_timer_get_time() / (1000 * 1000);
@@ -282,22 +287,22 @@ static handleMotorMessageResult handleMotorMessage() {
         uint8_t payload[] = {0x00, message.payload[0], message.payload[1], byte0, byte1, byte2, byte3};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == 0x08 && message.payload[1] == 0x94) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x94) {
         // GET DATA 2894 28:94(Unknown)
         uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x40, 0x0e, 0x14, 0x7b};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 3 && message.command == 0x08 && message.payload[1] == 0x99 && message.payload[2] == 0x00) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 3 && message.command == CMD_GET_DATA && message.payload[1] == 0x99 && message.payload[2] == 0x00) {
         // GET DATA 489900 48:99[0](Trip time)
         uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 3 && message.command == 0x08 && message.payload[1] == 0x9a && message.payload[2] == 0x00) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 3 && message.command == CMD_GET_DATA && message.payload[1] == 0x9a && message.payload[2] == 0x00) {
         // GET DATA 449a00 44:9a[0](Max speed)
         uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x02, 0x00, 0x00, 0x00, 0xd0};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == 0x09 && message.payload[1] == 0xc0 && message.payload[5] == 0xc1) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == CMD_PUT_DATA && message.payload[1] == 0xc0 && message.payload[5] == 0xc1) {
         // PUT DATA c0/c1
         speed = toUint16(message.payload, 2);
         trip = toUint32(message.payload, 6);
@@ -309,7 +314,7 @@ static handleMotorMessageResult handleMotorMessage() {
         xEventGroupSetBits(controlEventGroup, DISPLAY_UPDATE_BIT);
 #endif
         return CONTROL_TO_MOTOR;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == 0x09 && message.payload[1] == 0x38 && message.payload[5] == 0x3a) {
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == CMD_PUT_DATA && message.payload[1] == 0x38 && message.payload[5] == 0x3a) {
         // PUT DATA 38/3a
         FILE *fp = fopen(CALIBRATION_FILE, "w");
         if(fp == NULL) {
@@ -410,6 +415,13 @@ static void toMotorOnState(ion_state * state) {
     state->step = 0;
 }
 
+static void toCalibrateState(ion_state * state) {
+    queueBlink(10, 100, 100);
+
+    state->state = START_CALIBRATE;
+    state->step = 0;
+}
+
 static void toSetAssistLevelState(ion_state * state) {
     if(level == 0) {
         queueBlink(2, 250, 50);
@@ -447,7 +459,7 @@ static void handleTurnMotorOnState(ion_state * state) {
         // default/display? Or sets timeout? Or initializes display 'clock'?
         uint8_t payload[] = {0x80};
         messageType message = {};
-        readResult result = exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x22, payload, sizeof(payload)), &message, 225 / portTICK_PERIOD_MS );
+        readResult result = exchange(cmdReq(MSG_DISPLAY, MSG_BMS, CMD_BUTTON_POLL, payload, sizeof(payload)), &message, 225 / portTICK_PERIOD_MS );
     } else if(state->step == 1) {
         // Update display
         displayUpdate(false, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, true, 25, 0xccc, 0xccccc);
@@ -471,23 +483,22 @@ static void handleTurnMotorOnState(ion_state * state) {
         messageType message = {};
         // Motor on
         // Original BMS seems to repeat handoff till the motor responds, with 41ms between commands, but this should also work.
-        exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x30), &message, 41 / portTICK_PERIOD_MS);
+        exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_MOTOR_ON), &message, 41 / portTICK_PERIOD_MS);
         state->doHandoffs = true;
     } else if(state->step == nextStep + 1) {
         // Put data, which is common after motor on, left value is unknown, right is voltage.
         uint8_t payload[] = {0x94, 0xb0, 0x09, 0xc4, 0x14, 0xb1, 0x01, 0x14}; // PUT DATA (2500|27.6)
-        exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x09, payload, sizeof(payload)));
+        exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_PUT_DATA, payload, sizeof(payload)));
 #if CONFIG_ION_CU2 || CONFIG_ION_CU3
     } else if(state->step == nextStep + 2) {
-        // Get display serial
         messageType response = {};
-        exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x20), &response);
+        exchange(cmdReq(MSG_DISPLAY, MSG_BMS, CMD_GET_SERIAL), &response);
         memcpy(displaySerial, response.payload, 8);
     } else if(state->step == nextStep + 3) {
         // Get serial progammed in motor slot 2
         messageType response = {};
         uint8_t payload[] = {0x40, 0x5c, 0x00};
-        exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x08, payload, sizeof(payload)), &response);
+        exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_GET_DATA, payload, sizeof(payload)), &response);
         if(response.payload[3] == 8) {
             memcpy(motorSlot2Serial, response.payload + 4, 8);
         }
@@ -500,7 +511,7 @@ static void handleTurnMotorOnState(ion_state * state) {
         uint8_t payload[] = {0x40, 0x5c, 0x00, 0x08, 0x08, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
         memcpy(payload + 5, displaySerial, 8);
         messageType response = {};
-        exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x09, payload, sizeof(payload)), &response);
+        exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_PUT_DATA, payload, sizeof(payload)), &response);
 #endif
         toMotorOnState(state);
         return;
@@ -508,7 +519,7 @@ static void handleTurnMotorOnState(ion_state * state) {
     state->step++;
 }
 
-static void handleMotorOnState(ion_state * state, bool modeShortPress, bool lightLongPress) {
+static void handleMotorOnState(ion_state * state, bool modeShortPress, bool lightLongPress, bool calibrate) {
 
     static int64_t lastMoving = 0;
     int64_t now = esp_timer_get_time();
@@ -527,9 +538,8 @@ static void handleMotorOnState(ion_state * state, bool modeShortPress, bool ligh
     }
 
     // Handle calibration 'request' from a CU2 display, holding the light button while level is 0 and light is off.
-    if(level == 0x00 && lightOn == false && lightLongPress) {
-        queueBlink(10, 100, 100);
-        state->state = START_CALIBRATE;
+    if((level == 0x00 && lightOn == false && lightLongPress) || calibrate) {
+        toCalibrateState(state);
         return;
     } 
 
@@ -544,11 +554,38 @@ static void handleMotorOnState(ion_state * state, bool modeShortPress, bool ligh
     }            
 }
 
+static void handleStartCalibrateState(ion_state * state) {
+    // TODO: Turn motor (power) on if it's off (and wait for reply? can we see that in log handoffs?)
+    // - handoffs dp/bat, DP> light on, or assist level, or calibrate
+    //   100 handoffs (200 msg) later: 
+    //   >> Light on: put data BT>MT b0/b1
+    //   almost directly after motor turn on
+    //   >> cal: almost directly after cal cmd (35)
+    //   XXX handoffs later DP(CU3) pings motor, and starts to include it in handoffs
+    //   Motor does get data 2a
+    if(state->step == 0) {
+        exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_CALIBRATE));
+    } else if (state->step == 1) {
+        // Get data, which is common after calibrate. No idea what it's for.
+        uint8_t payload[] = {0x00, 0xdf};
+        exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_GET_DATA, payload, sizeof(payload)));
+#if CONFIG_ION_CU3
+    } else if (state->step == 2) {
+        // Let the display know calibration is done, not sure about what the payload means.
+        uint8_t payload[] = {0x01, 0x01};
+        exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x2a, payload, sizeof(payload)));
+#endif
+        // BMS actually stops listening here, it ignores (some?) motor messages.
+        toMotorOnState(state);
+        return;
+    }
+    state->step++;
+}
+
 static void handleSetAssistLevelState(ion_state * state) {
     if(level == 0) {
         if(state->assistOn) {
-            // Assist off
-            exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x33));
+            exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_ASSIST_OFF));
             state->assistOn = false;
 
             // TODO: Start waiting for MYSTERY BAT COMMAND 12 (with arg 0), while
@@ -563,17 +600,15 @@ static void handleSetAssistLevelState(ion_state * state) {
         toMotorOnState(state);
     } else {
         if(!state->assistOn) {
-            // Assist on
-            exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x32));
+            exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_ASSIST_ON));
             state->assistOn = true;
 
             // TODO: Start waiting for MYSTERY BAT COMMAND 12 (with arg 1), while
             // doing handoffs. So this should be a state? And in the handoff we
             // signal the next state.
         } else {
-            // Set assist level
             uint8_t payload[] = {level};
-            exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x34, payload, sizeof(payload)));
+            exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_SET_ASSIST_LEVEL, payload, sizeof(payload)));
 
             state->levelSet = level;
 #if CONFIG_ION_CU2 || CONFIG_ION_CU3
@@ -587,8 +622,7 @@ static void handleSetAssistLevelState(ion_state * state) {
 
 static void handleTurnMotorOffState(ion_state * state) {
     if(state->assistOn) {
-        // Assist off
-        exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x33));
+        exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_ASSIST_OFF));
         state->assistOn = false;
 
         // TODO: Start waiting for MYSTERY BAT COMMAND 12 (with arg 0), while
@@ -597,9 +631,8 @@ static void handleTurnMotorOffState(ion_state * state) {
     } else {
         if(state->step == 0) {
             motorOffAck = false;
-            // Motor off
             uint8_t payload[] = {0x00};
-            exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x31, payload, sizeof(payload)));
+            exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_MOTOR_OFF, payload, sizeof(payload)));
             // NOTE: XHP after this will stop responding to handoff messages after some time (and a put data message)
 
             state->step++;
@@ -645,8 +678,6 @@ static void my_task(void *pvParameter) {
     while(true) {
 
         // TODO:
-        // Use 'step' for calibrate, double check logic of all states.
-        // How do we go back to IDLE state? (timeout when level = 0?)
         // More use of timeouts
         // See if we really need 8k stack (copying message structure a lot I guess)
 
@@ -655,13 +686,13 @@ static void my_task(void *pvParameter) {
         // Serial should lead, buttons are uncommon.
         // Can we generate a eventgroup bit from uart?
 
-        EventBits_t buttonBits = xEventGroupWaitBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT | BUTTON_MODE_LONG_PRESS_BIT | BUTTON_LIGHT_SHORT_PRESS_BIT | BUTTON_LIGHT_LONG_PRESS_BIT | WAKEUP_BIT, true, false, 0);
+        EventBits_t buttonBits = xEventGroupWaitBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT | BUTTON_MODE_LONG_PRESS_BIT | BUTTON_LIGHT_SHORT_PRESS_BIT | BUTTON_LIGHT_LONG_PRESS_BIT | WAKEUP_BIT | CALIBRATE_BIT, true, false, 0);
         const bool modeShortPress = (buttonBits & BUTTON_MODE_SHORT_PRESS_BIT) != 0;
         const bool modeLongPress = (buttonBits & BUTTON_MODE_LONG_PRESS_BIT) != 0;
         const bool lightShortPress = (buttonBits & BUTTON_LIGHT_SHORT_PRESS_BIT) != 0;
         const bool lightLongPress = (buttonBits & BUTTON_LIGHT_LONG_PRESS_BIT) != 0;
         const bool wakeup = (buttonBits & WAKEUP_BIT) != 0;
-        
+        const bool calibrate = (buttonBits & CALIBRATE_BIT) != 0;
 
         if(lightShortPress) {
             toggleLight();
@@ -707,19 +738,9 @@ static void my_task(void *pvParameter) {
         } else if(state.state == TURN_MOTOR_ON) {
             handleTurnMotorOnState(&state);
         } else if(state.state == MOTOR_ON) {
-            handleMotorOnState(&state, modeShortPress, lightLongPress);
+            handleMotorOnState(&state, modeShortPress, lightLongPress, calibrate);
         } else if(state.state == START_CALIBRATE) {
-            // Start calibration
-            exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x35));
-            handoff();
-
-            // Put data, which is common after calibrate. No idea what it's for.
-            uint8_t payload[] = {0x00, 0xdf};
-            exchange(cmdReq(MSG_MOTOR, MSG_BMS, 0x08, payload, sizeof(payload)));
-            handoff();
-
-            // BMS actually stops listening here, it ignores (some?) motor messages.
-            toMotorOnState(&state);
+            handleStartCalibrateState(&state);
         } else if(state.state == SET_ASSIST_LEVEL) {
             handleSetAssistLevelState(&state);       
         } else if(state.state == TURN_MOTOR_OFF) {
