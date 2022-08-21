@@ -47,21 +47,20 @@
                 "${workspaceFolder}/sdk/idf/components/soc/include",
                 "${workspaceFolder}/sdk/idf/components/spi_flash/include",
                 "${workspaceFolder}/sdk/idf/components/spiffs/include",
-                "${workspaceFolder}/sdk/idf/components/tcpip_adapter/include",
                 "${workspaceFolder}/sdk/idf/components/vfs/include",
                 "${workspaceFolder}/sdk/idf/components/wear_levelling/include",
                 "${workspaceFolder}/sdk/idf/components/xtensa/esp32/include",
                 "${workspaceFolder}/sdk/idf/components/xtensa/include",
-                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2021r2-patch3-8.4.0/xtensa-esp32-elf/lib/gcc/xtensa-esp32-elf/8.4.0/include",
-                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2021r2-patch3-8.4.0/xtensa-esp32-elf/xtensa-esp32-elf/include"
+                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/lib/gcc/xtensa-esp32-elf/11.2.0/include",
+                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/xtensa-esp32-elf/include"
             ],
             "browse": {
                 "path": [
                     "${workspaceFolder}",
                     "${workspaceFolder}/components",
                     "${workspaceFolder}/sdk/idf/components",
-                    "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2021r2-patch3-8.4.0/xtensa-esp32-elf/lib/gcc/xtensa-esp32-elf/8.4.0/include",
-                    "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2021r2-patch3-8.4.0/xtensa-esp32-elf/xtensa-esp32-elf/include"
+                    "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/lib/gcc/xtensa-esp32-elf/11.2.0/include",
+                    "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/xtensa-esp32-elf/include"
                 ],
                 "limitSymbolsToIncludedHeaders": true,
                 "databaseFilename": ""
