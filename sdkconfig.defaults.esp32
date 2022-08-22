@@ -12,4 +12,23 @@ CONFIG_ION_RELAY=y
 CONFIG_ION_RELAY_PIN=32
 CONFIG_ION_RELAY_PIN_INVERTED=y
 
+CONFIG_ION_ADC=y
+
+# 2.65V is 40.1V in realty due to voltage divider (measured?)
+# Ratio is 40.1 / 2.65 = ~15.13
+#
+# Divider is 3K3 + 5K1 = 8K4 and 118K. Total 126K4.
+# Ratio is 126K4 / 8L4 = ~15.05
+#
+# Real voltage (mv) = voltage (mv) * 15.13
+# 36V battery (peak voltage: 41-42V).
+# For a 36V battery we assume: Full = 42V. Empty = 30V. (difference = 12V)
+# (realvoltage - 30V)/12V * 100 -> that is the percentage of charge
+
+# 30,000 / 15.13
+CONFIG_ION_ADC_EMPTY_MV=1983
+
+# 42,000 / 15.13
+CONFIG_ION_ADC_FULL_MV=2776
+
 CONFIG_ESP32_DEFAULT_CPU_FREQ_240=y

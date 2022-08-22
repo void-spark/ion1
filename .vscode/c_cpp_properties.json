@@ -13,6 +13,8 @@
                 "${workspaceFolder}/sdk/idf/components/bootloader_support/include",
                 "${workspaceFolder}/sdk/idf/components/driver/esp32/include",
                 "${workspaceFolder}/sdk/idf/components/driver/include",
+                "${workspaceFolder}/sdk/idf/components/esp_adc/include",
+                "${workspaceFolder}/sdk/idf/components/esp_adc/esp32/include",
                 "${workspaceFolder}/sdk/idf/components/esp_common/include",
                 "${workspaceFolder}/sdk/idf/components/esp_eth/include",
                 "${workspaceFolder}/sdk/idf/components/esp_event/include",

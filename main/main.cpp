@@ -24,6 +24,9 @@
 #elif CONFIG_ION_CU3
     #include "cu3.h"
 #endif
+#if CONFIG_ION_ADC
+    #include "bat.h"
+#endif
 
 static const char *TAG = "app";
 
@@ -128,7 +131,8 @@ static bool lightOn = false;
 // Motor indicates off is ready.
 static bool motorOffAck = false;
 
-
+static uint16_t batVal = 6000; // Bat. value for CU3, range is something like -10% - 100%
+static uint16_t batMax = 11000; // The max value for batVal (100%)
 
 static void setLight(bool value) {
     lightOn = value;
@@ -230,12 +234,12 @@ static handleMotorMessageResult handleMotorMessage() {
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x18) {
         // GET DATA 1418 14:18(Battery level)
-        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x1e, 0xb5};
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], (uint8_t)(batVal >> 8), (uint8_t)(batVal >> 0)};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 4 && message.command == CMD_GET_DATA && message.payload[1] == 0x18 && message.payload[3] == 0x1a) {
         // GET DATA 9418141a 14:18(Battery level) 14:1a(Max battery level)
-        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x1e, 0xb7, message.payload[2], message.payload[3], 0x1f, 0x53};
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], (uint8_t)(batVal >> 8), (uint8_t)(batVal >> 0), message.payload[2], message.payload[3], (uint8_t)(batMax >> 8), (uint8_t)(batMax >> 0)};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x2a) {
@@ -694,6 +698,16 @@ static void my_task(void *pvParameter) {
         const bool wakeup = (buttonBits & WAKEUP_BIT) != 0;
         const bool calibrate = (buttonBits & CALIBRATE_BIT) != 0;
 
+#if CONFIG_ION_ADC
+        // CU3 seems to calculate % with something close to:
+        // floor( (val - (0.091 * max)) / 0.009 * max )
+        // Below we do the reverse.
+        uint32_t offsetK = (91 * batMax);
+        uint32_t onePercentK = (9 * batMax);
+        uint32_t valueK = offsetK + onePercentK * adc_measure() + onePercentK / 2;
+        batVal = (uint16_t) (valueK / 1000);
+#endif
+
         if(lightShortPress) {
             toggleLight();
 #if CONFIG_ION_CU2 || CONFIG_ION_CU3
@@ -789,6 +803,10 @@ extern "C" void app_main() {
 
     // TODO: TO TASK
     initBlink();
+
+#if CONFIG_ION_ADC
+    adc_init();
+#endif
     
 #if CONFIG_ION_BUTTON
     bool held = false;

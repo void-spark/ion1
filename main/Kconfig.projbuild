@@ -51,4 +51,16 @@ menu "Sparta Ion Config"
         int "Send pin connected to bus"
         default 17
 
+    config ION_ADC
+        bool "Enable ADC for battery voltage measurement"
+        default n
+
+    config ION_ADC_EMPTY_MV
+        int "The voltage in mv measure on the ADC for empty (=0%)"
+        default 1983
+
+    config ION_ADC_FULL_MV
+        int "The voltage in mv measure on the ADC for full (=100%)"
+        default 2776
+
 endmenu
