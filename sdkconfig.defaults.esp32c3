@@ -2,6 +2,36 @@ CONFIG_ION_BUTTON=n
 CONFIG_ION_LED_PIN=3
 CONFIG_ION_UART=1
 CONFIG_ION_RXD=8
-CONFIG_ION_TXD=2
+CONFIG_ION_TXD=20
+
+CONFIG_ION_LIGHT=y
+CONFIG_ION_LIGHT_PIN=21
+CONFIG_ION_LIGHT_PIN_INVERTED=n
+
+CONFIG_ION_RELAY=y
+CONFIG_ION_RELAY_PIN=9
+CONFIG_ION_RELAY_PIN_INVERTED=y
 
 CONFIG_ESP32C3_DEFAULT_CPU_FREQ_160=y
+
+CONFIG_ION_ADC=y
+
+# Voltage dividers with a factor of 16 tend to be easy to find resistors for:
+# 150k & 10k
+# 180k & 12k
+# 240k & 16k
+# 270k & 18k
+# 300k & 20k
+# 330k & 22k
+# 360k & 24k
+
+# Real voltage (mv) = voltage (mv) * 16
+# 36V battery (peak voltage: 41-42V).
+# For a 36V battery we assume: Full = 42V. Empty = 30V. (difference = 12V)
+# (realvoltage - 30V)/12V * 100 -> that is the percentage of charge
+
+# 30,000 / 16
+CONFIG_ION_ADC_EMPTY_MV=1875
+
+# 42,000 / 16
+CONFIG_ION_ADC_FULL_MV=2625
