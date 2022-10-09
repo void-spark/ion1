@@ -655,6 +655,18 @@ static void handleTurnMotorOffState(ion_state * state) {
 
 static void my_task(void *pvParameter) {
 
+#if CONFIG_ION_RELAY
+    initRelay();
+#endif
+
+    initLight();
+
+    initBlink();
+
+#if CONFIG_ION_ADC
+    adc_init();
+#endif
+
     init_spiffs();
 
     initUart();
@@ -795,19 +807,6 @@ extern "C" void app_main() {
 
     xTaskCreatePinnedToCore(my_task, "my_task", 4096 * 2, NULL, 5, NULL, SECOND_CPU);
 
-#if CONFIG_ION_RELAY
-    initRelay();
-#endif
-
-    initLight();
-
-    // TODO: TO TASK
-    initBlink();
-
-#if CONFIG_ION_ADC
-    adc_init();
-#endif
-    
 #if CONFIG_ION_BUTTON
     bool held = false;
     button_event_t ev;
