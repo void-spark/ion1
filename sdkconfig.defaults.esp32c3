@@ -30,8 +30,8 @@ CONFIG_ION_ADC=y
 # For a 36V battery we assume: Full = 42V. Empty = 30V. (difference = 12V)
 # (realvoltage - 30V)/12V * 100 -> that is the percentage of charge
 
-# 30,000 / 16
-CONFIG_ION_ADC_EMPTY_MV=1875
+# 32,000 / 16
+CONFIG_ION_ADC_EMPTY_MV=2000
 
 # 42,000 / 16
 CONFIG_ION_ADC_FULL_MV=2625
