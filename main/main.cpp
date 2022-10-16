@@ -125,6 +125,9 @@ static uint16_t speed;
 // Trip in 10m increments
 static uint32_t trip;
 
+// Time offset in seconds, add this to time since boot to get real time.
+static uint32_t offset = 0;
+
 // Light on/off
 static bool lightOn = false;
 
@@ -282,7 +285,7 @@ static handleMotorMessageResult handleMotorMessage() {
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x8e) {
         // GET DATA 088e 08:8e(Time)
 
-        int64_t seconds = esp_timer_get_time() / (1000 * 1000);
+        int64_t seconds = esp_timer_get_time() / (1000 * 1000) + offset;
         uint8_t byte0 = (seconds >> 24) & 0xff;
         uint8_t byte1 = (seconds >> 16) & 0xff; 
         uint8_t byte2 = (seconds >> 8) & 0xff;
@@ -327,6 +330,14 @@ static handleMotorMessageResult handleMotorMessage() {
         }
         fwrite(message.payload, 1, 10, fp);
         fclose(fp);
+
+        uint8_t payload[] = {0x00};
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
+        return CONTROL_TO_MOTOR;
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 6 && message.command == CMD_PUT_DATA && message.payload[1] == 0x8e) {
+        uint32_t newTime = toUint32(message.payload, 2);
+        int64_t seconds = esp_timer_get_time() / (1000 * 1000);
+        offset = newTime - seconds;
 
         uint8_t payload[] = {0x00};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
@@ -491,6 +502,8 @@ static void handleTurnMotorOnState(ion_state * state) {
         state->doHandoffs = true;
     } else if(state->step == nextStep + 1) {
         // Put data, which is common after motor on, left value is unknown, right is voltage.
+        // TODO: This seems to repeat and go up/down, do that if we can actually measure the voltage?
+        // Which interval??
         uint8_t payload[] = {0x94, 0xb0, 0x09, 0xc4, 0x14, 0xb1, 0x01, 0x14}; // PUT DATA (2500|27.6)
         exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_PUT_DATA, payload, sizeof(payload)));
 #if CONFIG_ION_CU2 || CONFIG_ION_CU3
