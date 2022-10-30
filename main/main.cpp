@@ -2,7 +2,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/unistd.h>
-#include <sys/stat.h>
 #include "sdkconfig.h"
 #include "soc/soc_caps.h"
 #include "freertos/FreeRTOS.h"
@@ -12,7 +11,6 @@
 #include "freertos/timers.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
-#include "esp_spiffs.h"
 #include "esp_timer.h"
 #include "nvs_flash.h"
 #include "button.h"
@@ -29,6 +27,7 @@
 #endif
 #include "relays.h"
 #include "trip.h"
+#include "storage.h"
 
 static const char *TAG = "app";
 
@@ -39,8 +38,6 @@ static const char *TAG = "app";
 #else
     #define SECOND_CPU PRO_CPU_NUM
 #endif
-
-#define CALIBRATION_FILE "/spiffs/calibration.bin"
 
 #if CONFIG_ION_BUTTON
     #define BUTTON (GPIO_NUM_0)
@@ -189,15 +186,10 @@ static handleMotorMessageResult handleMotorMessage() {
         // GET DATA 9438283a 14:38(Calibration A) 28:3a(Calibration B)
         uint8_t payload[] = {0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // Data (last 10 bytes) to be replaced
 
-        struct stat st;
-        if(stat(CALIBRATION_FILE, &st) == 0) {
-            FILE *fp = fopen(CALIBRATION_FILE, "r");
-            if(fp == NULL) {
-                ESP_LOGE(TAG, "Failed to open calibration file for reading");
+        if(calibrationFileExists()) {
+            if(!readCalibrationData(payload + 1)) {
                 return CONTROL_TO_MOTOR;
             }
-            fread(payload + 1, 1, 10, fp);
-            fclose(fp);
         } else {
             // Backup data
             // Gold small test: 94 38 4b 13 28 3a 3e 98 ed f3
@@ -265,13 +257,9 @@ static handleMotorMessageResult handleMotorMessage() {
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == CMD_PUT_DATA && message.payload[1] == 0x38 && message.payload[5] == 0x3a) {
         // PUT DATA 38/3a
-        FILE *fp = fopen(CALIBRATION_FILE, "w");
-        if(fp == NULL) {
-            ESP_LOGE(TAG, "Failed to open calibration file for writing");
+        if(!writeCalibrationData(message.payload)) {
             return CONTROL_TO_MOTOR;
         }
-        fwrite(message.payload, 1, 10, fp);
-        fclose(fp);
 
         uint8_t payload[] = {0x00};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
@@ -308,40 +296,6 @@ static bool handoff() {
         }
         if(result == HANDOFF_TIMEOUT) {
             return false;
-        }
-    }
-}
-
-static void init_spiffs() {
-    ESP_LOGI(TAG, "Initializing SPIFFS");
-
-    esp_vfs_spiffs_conf_t spiffs_conf = {};
-    spiffs_conf.base_path = "/spiffs";
-    spiffs_conf.partition_label = NULL;
-    spiffs_conf.max_files = 5;
-    spiffs_conf.format_if_mount_failed = true;
-
-    ESP_ERROR_CHECK(esp_vfs_spiffs_register(&spiffs_conf));
-
-    size_t total = 0, used = 0;
-    esp_err_t ret = esp_spiffs_info(spiffs_conf.partition_label, &total, &used);
-    if(ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s)", esp_err_to_name(ret));
-    } else {
-        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
-    }
-    
-    struct stat st;
-    if(stat(CALIBRATION_FILE, &st) == 0) {
-        FILE *fp = fopen(CALIBRATION_FILE, "r");
-        if(fp == NULL) {
-            ESP_LOGE(TAG, "Failed to open calibration file for reading");
-        } else {
-            uint8_t data[10];
-            size_t read = fread(data, 1, sizeof(data), fp);
-            fclose(fp);
-            ESP_LOGI(TAG, "Calibration file found. Size: %lu, content:", st.st_size);        
-            ESP_LOG_BUFFER_HEX(TAG, data, read);
         }
     }
 }

@@ -35,6 +35,9 @@ jobs:
     - if: ${{ matrix.custom != 'std' }}
       run: cat sdkconfig.${{ matrix.custom }} >> sdkconfig.defaults.${{ matrix.target }}
 
+    # Show used config
+    - run: cat sdkconfig.defaults.${{ matrix.target }}
+
     - name: esp-idf build
       uses: espressif/esp-idf-ci-action@v1
       with:
