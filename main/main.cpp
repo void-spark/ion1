@@ -214,7 +214,14 @@ static handleMotorMessageResult handleMotorMessage() {
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x80) {
         // GET DATA 0880 08:80(Total distance)
-        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x00, 0x11, 0xd4, 0xcd};
+
+        uint32_t total = getTotal();
+        uint8_t byte0 = (total >> 24) & 0xff;
+        uint8_t byte1 = (total >> 16) & 0xff; 
+        uint8_t byte2 = (total >> 8) & 0xff;
+        uint8_t byte3 = total & 0xff;
+
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], byte0, byte1, byte2, byte3};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x8e) {
