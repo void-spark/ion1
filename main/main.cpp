@@ -28,6 +28,7 @@
     #include "bat.h"
 #endif
 #include "relays.h"
+#include "trip.h"
 
 static const char *TAG = "app";
 
@@ -100,9 +101,6 @@ static uint8_t level = 0x00;
 
 // Speed in km/h*10
 static uint16_t speed;
-
-// Trip in 10m increments
-static uint32_t trip;
 
 // Time offset in seconds, add this to time since boot to get real time.
 static uint32_t offset = 0;
@@ -249,7 +247,7 @@ static handleMotorMessageResult handleMotorMessage() {
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == CMD_PUT_DATA && message.payload[1] == 0xc0 && message.payload[5] == 0xc1) {
         // PUT DATA c0/c1
         speed = toUint16(message.payload, 2);
-        trip = toUint32(message.payload, 6);
+        distanceUpdate(toUint32(message.payload, 6));
 
         uint8_t payload[] = {0x00};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
@@ -703,9 +701,9 @@ static void my_task(void *pvParameter) {
          if((bits & DISPLAY_UPDATE_BIT) != 0) {
             xEventGroupClearBits(controlEventGroup, DISPLAY_UPDATE_BIT);
 #if CONFIG_ION_CU2
-            showState(level, getLight(), speed, trip);
+            showState(level, getLight(), speed, getTrip1());
 #elif CONFIG_ION_CU3
-            showStateCu3(level, state.displayOn, getLight(), speed, trip);
+            showStateCu3(level, state.displayOn, getLight(), speed, getTrip1(), getTrip2());
 #endif
         } else 
 #endif

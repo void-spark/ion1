@@ -4,8 +4,8 @@
 
 #include "cu3.h"
 
-void showStateCu3(uint8_t level, bool screenOn, bool lightOn, uint16_t speed, uint32_t trip) {
-    displayUpdateCu3(DSP_SCREEN, screenOn, lightOn, false, level, speed, trip, trip);
+void showStateCu3(uint8_t level, bool screenOn, bool lightOn, uint16_t speed, uint32_t trip1, uint32_t trip2) {
+    displayUpdateCu3(DSP_SCREEN, screenOn, lightOn, false, level, speed, trip1, trip2);
 }
 
 /**
