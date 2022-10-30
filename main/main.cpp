@@ -59,6 +59,7 @@ static const int DISPLAY_UPDATE_BIT = BIT5;
 static const int IGNORE_HELD_BIT = BIT6;
 static const int WAKEUP_BIT = BIT7;
 static const int CALIBRATE_BIT = BIT8;
+static const int MOTOR_UPDATE_BIT = BIT9;
 
 #if CONFIG_ION_LIGHT
     #define LIGHT_PIN ((gpio_num_t)CONFIG_ION_LIGHT_PIN)
@@ -137,6 +138,8 @@ static bool motorOffAck = false;
 static uint16_t batVal = 6000; // Bat. value for CU3, range is something like -10% - 100%
 static uint16_t batMax = 11000; // The max value for batVal (100%)
 
+static TimerHandle_t motorUpdateTimer;
+
 static void setLight(bool value) {
     lightOn = value;
 #if CONFIG_ION_LIGHT
@@ -187,6 +190,8 @@ static uint16_t toUint16(uint8_t *buffer, size_t offset) {
 static uint32_t toUint32(uint8_t *buffer, size_t offset) {
     return ((uint32_t)buffer[offset] << 24) | ((uint32_t)buffer[offset + 1] << 16) | ((uint32_t)buffer[offset + 2] << 8) | ((uint32_t)buffer[offset + 3] << 0);
 }
+
+static void motorUpdateTimerCallback(TimerHandle_t xTimer) { xEventGroupSetBits(controlEventGroup, MOTOR_UPDATE_BIT); }
 
 static handleMotorMessageResult handleMotorMessage() {
     messageType message = {};
@@ -456,6 +461,24 @@ static void toTurnMotorOffState(ion_state * state) {
     state->step = 0;
 }
 
+/**
+ * Put data from bat. to motor. Sent initially, and then every 10, 15, 50 seconds? (no good recording with timging yet).
+ * Values:
+ * b0 - Almost always 2500, only seen it lower on low bat uphill.
+ * b1 - Volts in 100mv Goes up and down, so likely current voltage, even under load.
+ */
+static void motorUpdate() {
+    uint16_t unknown = 2500; // Normally 2500, very sometimes much lower, on low battery up hill?
+    uint16_t volts = 276; // Volts, in 100mv
+
+    uint8_t payload[] = {
+            0x94, 0xb0, 
+            (uint8_t)(unknown >> 8), (uint8_t)(unknown >> 0), 
+            0x14, 0xb1, 
+            (uint8_t)(volts >> 8), (uint8_t)(volts >> 0)};
+    exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_PUT_DATA, payload, sizeof(payload)));
+}
+
 static void handleTurnMotorOnState(ion_state * state) {
 
     static uint8_t displaySerial[8] = {};
@@ -501,11 +524,8 @@ static void handleTurnMotorOnState(ion_state * state) {
         exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_MOTOR_ON), &message, 41 / portTICK_PERIOD_MS);
         state->doHandoffs = true;
     } else if(state->step == nextStep + 1) {
-        // Put data, which is common after motor on, left value is unknown, right is voltage.
-        // TODO: This seems to repeat and go up/down, do that if we can actually measure the voltage?
-        // Which interval??
-        uint8_t payload[] = {0x94, 0xb0, 0x09, 0xc4, 0x14, 0xb1, 0x01, 0x14}; // PUT DATA (2500|27.6)
-        exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_PUT_DATA, payload, sizeof(payload)));
+        motorUpdate();
+        xTimerStart(motorUpdateTimer, 0);
 #if CONFIG_ION_CU2 || CONFIG_ION_CU3
     } else if(state->step == nextStep + 2) {
         messageType response = {};
@@ -647,6 +667,8 @@ static void handleTurnMotorOffState(ion_state * state) {
         // signal the next state.
     } else {
         if(state->step == 0) {
+            xTimerStop(motorUpdateTimer, 0);
+
             motorOffAck = false;
             uint8_t payload[] = {0x00};
             exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_MOTOR_OFF, payload, sizeof(payload)));
@@ -695,6 +717,8 @@ static void my_task(void *pvParameter) {
     );
 #endif
 
+    motorUpdateTimer = xTimerCreate("motorUpdateTimer", (10000 / portTICK_PERIOD_MS), pdTRUE, (void *)0, motorUpdateTimerCallback);
+
     ion_state state = {
         .state = IDLE,
         .step = 0,
@@ -741,13 +765,13 @@ static void my_task(void *pvParameter) {
         }
 
 #if CONFIG_ION_CU2
-        EventBits_t bits = xEventGroupWaitBits(controlEventGroup, CHECK_BUTTON_BIT | DISPLAY_UPDATE_BIT, false, false, 0);
+        EventBits_t bits = xEventGroupWaitBits(controlEventGroup, CHECK_BUTTON_BIT | DISPLAY_UPDATE_BIT | MOTOR_UPDATE_BIT, false, false, 0);
         if((bits & CHECK_BUTTON_BIT) != 0) {
             xEventGroupClearBits(controlEventGroup, CHECK_BUTTON_BIT);
             buttonCheck();
         } else
 #elif CONFIG_ION_CU3
-        EventBits_t bits = xEventGroupWaitBits(controlEventGroup, DISPLAY_UPDATE_BIT, false, false, 0);
+        EventBits_t bits = xEventGroupWaitBits(controlEventGroup, DISPLAY_UPDATE_BIT | MOTOR_UPDATE_BIT, false, false, 0);
 #endif
 #if CONFIG_ION_CU2 || CONFIG_ION_CU3
          if((bits & DISPLAY_UPDATE_BIT) != 0) {
@@ -759,7 +783,10 @@ static void my_task(void *pvParameter) {
 #endif
         } else 
 #endif
-        if(state.state == IDLE) {
+        if((bits & MOTOR_UPDATE_BIT) != 0) {
+            xEventGroupClearBits(controlEventGroup, MOTOR_UPDATE_BIT);
+            motorUpdate();
+        } else if(state.state == IDLE) {
             if(modeShortPress) {
                 toTurnMotorOnState(&state);
             } else {
