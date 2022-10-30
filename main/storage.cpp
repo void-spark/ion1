@@ -42,31 +42,42 @@ void init_spiffs() {
 }
 
 bool calibrationFileExists() {
-    struct stat st;
-    return stat(CALIBRATION_FILE, &st) == 0;
+    return fileExists(CALIBRATION_FILE);
 }
 
 bool readCalibrationData(uint8_t * target) {
-    FILE *fp = fopen(CALIBRATION_FILE, "r");
-    if(fp == NULL) {
-        ESP_LOGE(TAG, "Failed to open calibration file for reading");
-        return false;
-    }
-    fread(target, 1, 10, fp);
-    fclose(fp);
-
-    return true;
+    return readData(CALIBRATION_FILE, target, 10);
 }
 
 bool writeCalibrationData(uint8_t * source){
-    FILE *fp = fopen(CALIBRATION_FILE, "w");
+    return writeData(CALIBRATION_FILE, source, 10);
+}
+
+bool fileExists(const char * path) {
+    struct stat st;
+    return stat(path, &st) == 0;
+}
+
+bool readData(const char * path, void * target, size_t size) {
+    FILE *fp = fopen(path, "r");
     if(fp == NULL) {
-        ESP_LOGE(TAG, "Failed to open calibration file for writing");
+        ESP_LOGE(TAG, "Failed to open file %s for reading", path);
         return false;
     }
-    fwrite(source, 1, 10, fp);
+    fread(target, 1, size, fp);
     fclose(fp);
 
     return true;
 }
 
+bool writeData(const char * path, void * source, size_t size) {
+    FILE *fp = fopen(path, "w");
+    if(fp == NULL) {
+        ESP_LOGE(TAG, "Failed to open file %s for writing", path);
+        return false;
+    }
+    fwrite(source, 1, size, fp);
+    fclose(fp);
+
+    return true;
+}

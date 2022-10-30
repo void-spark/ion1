@@ -13,3 +13,9 @@ uint32_t getTotal();
 
 // Distance update from the motor, distance since motor power on in 10m increments
 void distanceUpdate(uint32_t distance);
+
+// Load distances from flash
+void loadDistances();
+
+// Write distances to flash
+void saveDistances();

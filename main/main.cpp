@@ -350,6 +350,16 @@ static void toTurnMotorOffState(ion_state * state) {
     state->step = 0;
 }
 
+static void toMotorOffState(ion_state * state) {
+
+    queueBlink(4, 100, 300);
+
+    saveDistances();
+
+    state->state = MOTOR_OFF;
+    state->step = 0;
+}
+
 /**
  * Put data from bat. to motor. Sent initially, and then every 10, 15, 50 seconds? (no good recording with timging yet).
  * Values:
@@ -568,9 +578,7 @@ static void handleTurnMotorOffState(ion_state * state) {
             if(motorOffAck) {
                 setRelay(false);
 
-                queueBlink(4, 100, 300);
-                state->state = MOTOR_OFF;
-                state->step = 0;
+                toMotorOffState(state);
             }
     }
 }
@@ -590,6 +598,8 @@ static void my_task(void *pvParameter) {
     init_spiffs();
 
     initUart();
+
+    loadDistances();
 
 #if CONFIG_ION_CU2
     initCu2(controlEventGroup, 

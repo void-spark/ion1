@@ -1,26 +1,33 @@
+#include "storage.h"
 #include "trip.h"
 
-// Trip-1 in 10m increments
-static uint32_t trip1;
+#define DISTANCE_FILE "/spiffs/distance.bin"
 
-// Trip-2 in 10m increments
-static uint32_t trip2;
+typedef struct distancesStruct {
+    // Trip-1 in 10m increments
+    uint32_t trip1;
 
-// Total in 10m increments
-static uint32_t total;
+    // Trip-2 in 10m increments
+    uint32_t trip2;
+
+    // Total in 10m increments
+    uint32_t total;
+};
+
+static distancesStruct distances;
 
 static uint32_t lastDistance = 0;
 
 uint32_t getTrip1() {
-    return trip1;
+    return distances.trip1;
 }
 
 uint32_t getTrip2() {
-    return trip2;
+    return distances.trip2;
 }
 
 uint32_t getTotal() {
-    return total;
+    return distances.total;
 }
 
 void distanceUpdate(uint32_t distance) {
@@ -33,9 +40,19 @@ void distanceUpdate(uint32_t distance) {
 
     uint32_t delta = distance - lastDistance;
 
-    trip1 += delta;
-    trip2 += delta;
-    total += delta;
+    distances.trip1 += delta;
+    distances.trip2 += delta;
+    distances.total += delta;
 
     lastDistance = distance;
+}
+
+void loadDistances() {
+    if(fileExists(DISTANCE_FILE)) {
+        readData(DISTANCE_FILE, &distances, sizeof(distances));
+    }
+}
+
+void saveDistances() {
+    writeData(DISTANCE_FILE, &distances, sizeof(distances));
 }
