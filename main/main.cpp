@@ -27,9 +27,9 @@
 #if CONFIG_ION_ADC
     #include "bat.h"
 #endif
+#include "relays.h"
 
 static const char *TAG = "app";
-
 
 #define FIRST_CPU PRO_CPU_NUM
 
@@ -60,28 +60,6 @@ static const int IGNORE_HELD_BIT = BIT6;
 static const int WAKEUP_BIT = BIT7;
 static const int CALIBRATE_BIT = BIT8;
 static const int MOTOR_UPDATE_BIT = BIT9;
-
-#if CONFIG_ION_LIGHT
-    #define LIGHT_PIN ((gpio_num_t)CONFIG_ION_LIGHT_PIN)
-    #if CONFIG_ION_LIGHT_PIN_INVERTED
-        #define LIGHT_ON 0
-        #define LIGHT_OFF 1
-    #else
-        #define LIGHT_ON 1
-        #define LIGHT_OFF 0
-    #endif
-#endif
-
-#if CONFIG_ION_RELAY
-    #define RELAY_PIN ((gpio_num_t)CONFIG_ION_RELAY_PIN)
-    #if CONFIG_ION_RELAY_PIN_INVERTED
-        #define RELAY_ON 0
-        #define RELAY_OFF 1
-    #else
-        #define RELAY_ON 1
-        #define RELAY_OFF 0
-    #endif
-#endif
 
 static EventGroupHandle_t controlEventGroup;
 
@@ -129,9 +107,6 @@ static uint32_t trip;
 // Time offset in seconds, add this to time since boot to get real time.
 static uint32_t offset = 0;
 
-// Light on/off
-static bool lightOn = false;
-
 // Motor indicates off is ready.
 static bool motorOffAck = false;
 
@@ -139,49 +114,6 @@ static uint16_t batVal = 6000; // Bat. value for CU3, range is something like -1
 static uint16_t batMax = 11000; // The max value for batVal (100%)
 
 static TimerHandle_t motorUpdateTimer;
-
-static void setLight(bool value) {
-    lightOn = value;
-#if CONFIG_ION_LIGHT
-    gpio_set_level(LIGHT_PIN, value ? LIGHT_ON : LIGHT_OFF);
-#endif
-}
-
-static void toggleLight() {
-    setLight(!lightOn);
-}
-
-static void initLight() {
-#if CONFIG_ION_LIGHT
-    gpio_config_t io_conf = {};
-    io_conf.pin_bit_mask = BIT64(LIGHT_PIN);
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    ESP_ERROR_CHECK(gpio_config(&io_conf));
-#endif
-
-    setLight(false);
-}
-
-#if CONFIG_ION_RELAY
-static void setRelay(bool value) {
-    gpio_set_level(RELAY_PIN, value ? RELAY_ON : RELAY_OFF);
-}
-
-static void initRelay() {
-    gpio_config_t io_conf = {};
-    io_conf.pin_bit_mask = BIT64(RELAY_PIN);
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    ESP_ERROR_CHECK(gpio_config(&io_conf));
-
-    setRelay(false);
-}
-#endif
 
 static uint16_t toUint16(uint8_t *buffer, size_t offset) { 
     return ((uint16_t)buffer[offset] << 8) | ((uint16_t)buffer[offset + 1] << 0); 
@@ -422,9 +354,7 @@ static void readTask(void *pvParameter) {
 static void toTurnMotorOnState(ion_state * state) {
     state->displayOn = true;
     queueBlink(1, 500, 50);
-#if CONFIG_ION_RELAY
     setRelay(true);
-#endif
 
     state->state = TURN_MOTOR_ON;
     state->step = 0;
@@ -575,7 +505,7 @@ static void handleMotorOnState(ion_state * state, bool modeShortPress, bool ligh
     }
 
     // Handle calibration 'request' from a CU2 display, holding the light button while level is 0 and light is off.
-    if((level == 0x00 && lightOn == false && lightLongPress) || calibrate) {
+    if((level == 0x00 && getLight() == false && lightLongPress) || calibrate) {
         toCalibrateState(state);
         return;
     } 
@@ -677,9 +607,7 @@ static void handleTurnMotorOffState(ion_state * state) {
             state->step++;
         } else if (state->step == 1)
             if(motorOffAck) {
-#if CONFIG_ION_RELAY
                 setRelay(false);
-#endif
 
                 queueBlink(4, 100, 300);
                 state->state = MOTOR_OFF;
@@ -690,9 +618,7 @@ static void handleTurnMotorOffState(ion_state * state) {
 
 static void my_task(void *pvParameter) {
 
-#if CONFIG_ION_RELAY
     initRelay();
-#endif
 
     initLight();
 
@@ -777,9 +703,9 @@ static void my_task(void *pvParameter) {
          if((bits & DISPLAY_UPDATE_BIT) != 0) {
             xEventGroupClearBits(controlEventGroup, DISPLAY_UPDATE_BIT);
 #if CONFIG_ION_CU2
-            showState(level, lightOn, speed, trip);
+            showState(level, getLight(), speed, trip);
 #elif CONFIG_ION_CU3
-            showStateCu3(level, state.displayOn, lightOn, speed, trip);
+            showStateCu3(level, state.displayOn, getLight(), speed, trip);
 #endif
         } else 
 #endif
