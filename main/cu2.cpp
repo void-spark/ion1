@@ -118,11 +118,11 @@ static uint32_t digits(uint32_t value, size_t digits, size_t atleast) {
     return result;
 }
 
-void showState(uint8_t level, bool lightOn, uint16_t speed, uint32_t trip) {
+void showState(uint8_t level, bool lightOn, uint16_t speed, uint32_t trip, uint8_t batPercentage) {
     uint16_t numTop = digits(speed, 3, 2);
     uint32_t numBottom = digits(trip / 100, 5, 1);
     displayUpdate(false, (assist_level)level, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, lightOn ? BLNK_SOLID : BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID,
-                  false, 50, numTop, numBottom);
+                  false, batPercentage, numTop, numBottom);
 }
 
 void displayUpdate(bool setDefault,
@@ -138,7 +138,7 @@ void displayUpdate(bool setDefault,
                    blink_speed top,
                    blink_speed bottom,
                    bool miles,
-                   uint8_t battery,
+                   uint8_t batPercentage,
                    uint16_t topVal,
                    uint32_t bottomVal) {
     uint8_t assist = assistBlink;
@@ -156,6 +156,6 @@ void displayUpdate(bool setDefault,
     uint8_t numBottom2 = (uint8_t)(bottomVal >> 8);
     uint8_t numBottom3 = (uint8_t)(bottomVal >> 0);
 
-    uint8_t payload[] = {assist, segments1, segments2, battery, numTop1, numTop2, numBottom1, numBottom2, numBottom3};
+    uint8_t payload[] = {assist, segments1, segments2, batPercentage, numTop1, numTop2, numBottom1, numBottom2, numBottom3};
     exchange(cmdReq(MSG_DISPLAY, MSG_BMS, (uint8_t)(setDefault ? 0x27 : 0x26), payload, sizeof(payload)));
 }

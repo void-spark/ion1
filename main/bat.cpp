@@ -89,36 +89,40 @@ void adc_init() {
     adc_calibration_init(ADC_UNIT_1, ADC_ATTEN);
 }
 
-uint8_t adc_measure() {
+uint32_t measureBatMv() {
     int adc_raw = 0;
-    int voltage = 0;
-
-    uint32_t realvoltage = 0;
-    uint8_t batterypercentage = 1;
-
     ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC1_CHAN, &adc_raw));
     if (cali_enable) {
-        ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_handle, adc_raw, &voltage));
+        int adcVoltageMv = 0;
+        ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_handle, adc_raw, &adcVoltageMv));
 
-        uint32_t emptyMv = CONFIG_ION_ADC_EMPTY_MV;
-        uint32_t fullMv = CONFIG_ION_ADC_FULL_MV;
-
-        int32_t percentage = ((voltage - emptyMv) * 100) / (fullMv - emptyMv);
-
-        if (percentage < 0) {
-            batterypercentage = 0;
-        } else if (percentage > 100) {
-            batterypercentage = 100;
-        } else {
-            batterypercentage = (uint8_t)percentage;
-        }
-
-        ESP_LOGD(TAG, "Raw: %d, Measured: %d mV, Percentage: %d%%", adc_raw, voltage, batterypercentage);
-
-        return batterypercentage;
+        // Calculate actual voltage in mv
+        return (adcVoltageMv * CONFIG_ION_DIVIDER_SCALE) / 1000;
     }
 
     return 0x00;
+}
+
+uint8_t batMvToPercentage(uint32_t batMv) {
+
+    // Get lower/upper limit from configuration
+    uint32_t emptyMv = CONFIG_ION_ADC_EMPTY_MV;
+    uint32_t fullMv = CONFIG_ION_ADC_FULL_MV;
+
+    // Calculate the percentage
+    int32_t percentage = ((batMv - emptyMv) * 100) / (fullMv - emptyMv);
+
+    // Limit to 0-100
+    uint8_t batterypercentage = 0;
+    if (percentage < 0) {
+        batterypercentage = 0;
+    } else if (percentage > 100) {
+        batterypercentage = 100;
+    } else {
+        batterypercentage = (uint8_t)percentage;
+    }
+
+    return batterypercentage;
 }
 
 void adc_teardown() {

@@ -105,8 +105,11 @@ static uint32_t offset = 0;
 // Motor indicates off is ready.
 static bool motorOffAck = false;
 
-static uint16_t batVal = 6000; // Bat. value for CU3, range is something like -10% - 100%
-static uint16_t batMax = 11000; // The max value for batVal (100%)
+// Use a fake value of 27.6v when we don't have ADC.
+static uint32_t batMv = 27600;
+
+// Use a fake value of 50% when we don't have ADC.
+static uint8_t batPercentage;
 
 static TimerHandle_t motorUpdateTimer;
 
@@ -169,11 +172,14 @@ static handleMotorMessageResult handleMotorMessage() {
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x18) {
         // GET DATA 1418 14:18(Battery level)
+        uint16_t batVal = toCu3BatValue(batPercentage);
         uint8_t payload[] = {0x00, message.payload[0], message.payload[1], (uint8_t)(batVal >> 8), (uint8_t)(batVal >> 0)};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 4 && message.command == CMD_GET_DATA && message.payload[1] == 0x18 && message.payload[3] == 0x1a) {
         // GET DATA 9418141a 14:18(Battery level) 14:1a(Max battery level)
+        uint16_t batVal = toCu3BatValue(batPercentage);
+        uint16_t batMax = cu3BatMaxValue();
         uint8_t payload[] = {0x00, message.payload[0], message.payload[1], (uint8_t)(batVal >> 8), (uint8_t)(batVal >> 0), message.payload[2], message.payload[3], (uint8_t)(batMax >> 8), (uint8_t)(batMax >> 0)};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_MOTOR;
@@ -367,8 +373,8 @@ static void toMotorOffState(ion_state * state) {
  * b1 - Volts in 100mv Goes up and down, so likely current voltage, even under load.
  */
 static void motorUpdate() {
-    uint16_t unknown = 2500; // Normally 2500, very sometimes much lower, on low battery up hill?
-    uint16_t volts = 276; // Volts, in 100mv
+    uint16_t unknown = 2500; // Normally 2500, very sometimes much lower, on low battery up hill? Amp limit in 10ma??
+    uint16_t volts = batMv / 100; // Volts, in 100mv
 
     uint8_t payload[] = {
             0x94, 0xb0, 
@@ -583,6 +589,11 @@ static void handleTurnMotorOffState(ion_state * state) {
     }
 }
 
+static void measureBat() {
+    batMv = measureBatMv();
+    batPercentage = batMvToPercentage(batMv);
+}
+
 static void my_task(void *pvParameter) {
 
     initRelay();
@@ -643,13 +654,7 @@ static void my_task(void *pvParameter) {
         const bool calibrate = (buttonBits & CALIBRATE_BIT) != 0;
 
 #if CONFIG_ION_ADC
-        // CU3 seems to calculate % with something close to:
-        // floor( (val - (0.091 * max)) / 0.009 * max )
-        // Below we do the reverse.
-        uint32_t offsetK = (91 * batMax);
-        uint32_t onePercentK = (9 * batMax);
-        uint32_t valueK = offsetK + onePercentK * adc_measure() + onePercentK / 2;
-        batVal = (uint16_t) (valueK / 1000);
+        measureBat();
 #endif
 
         if(lightShortPress) {
@@ -672,7 +677,7 @@ static void my_task(void *pvParameter) {
          if((bits & DISPLAY_UPDATE_BIT) != 0) {
             xEventGroupClearBits(controlEventGroup, DISPLAY_UPDATE_BIT);
 #if CONFIG_ION_CU2
-            showState(level, getLight(), speed, getTrip1());
+            showState(level, getLight(), speed, getTrip1(), batPercentage);
 #elif CONFIG_ION_CU3
             showStateCu3(level, state.displayOn, getLight(), speed, getTrip1(), getTrip2());
 #endif

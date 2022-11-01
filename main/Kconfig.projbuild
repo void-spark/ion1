@@ -55,12 +55,16 @@ menu "Sparta Ion Config"
         bool "Enable ADC for battery voltage measurement"
         default n
 
+    config ION_DIVIDER_SCALE
+        int "The division of the voltage divider, times 1000. For example 150k & 10k resistor is: ((150 + 10) / 10) * 1000 = 16000."
+        default 16000
+
     config ION_ADC_EMPTY_MV
-        int "The voltage in mv measure on the ADC for empty (=0%)"
-        default 1983
+        int "The actual battery voltage in mv for empty (=0%). For example 32000mv for a 10s battery"
+        default 32000
 
     config ION_ADC_FULL_MV
-        int "The voltage in mv measure on the ADC for full (=100%)"
-        default 2776
+        int "The actual battery voltage in mv for full (=100%). For example 42000mv for a 10s battery"
+        default 42000
 
 endmenu

@@ -35,3 +35,26 @@ void displayUpdateCu3(display_type type, bool screen, bool light, bool battery2,
     messageType message = {};
     readResult result = exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x28, payload, sizeof(payload)), &message, 225 / portTICK_PERIOD_MS );
 }
+
+/**
+ * The max value for batVal (100%)
+ */
+uint16_t cu3BatMaxValue() {
+    return 11000;
+}
+
+/** 
+ * Calculate the Bat. value for CU3, range is something like -10% - 100%
+*/
+uint16_t toCu3BatValue(uint8_t batPercentage) {
+
+    uint16_t batMax = cu3BatMaxValue(); 
+
+    // CU3 seems to calculate % with something close to:
+    // floor( (val - (0.091 * max)) / 0.009 * max )
+    // Below we do the reverse.
+    uint32_t offsetK = (91 * batMax);
+    uint32_t onePercentK = (9 * batMax);
+    uint32_t valueK = offsetK + onePercentK * batPercentage + onePercentK / 2;
+    return (uint16_t) (valueK / 1000);
+}

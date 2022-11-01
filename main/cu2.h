@@ -21,7 +21,7 @@ void startButtonCheck();
 
 void stopButtonCheck();
 
-void showState(uint8_t level, bool lightOn, uint16_t speed, uint32_t trip);
+void showState(uint8_t level, bool lightOn, uint16_t speed, uint32_t trip, uint8_t batPercentage);
 
 void displayUpdate(bool setDefault,
                    assist_level assistLevel,
@@ -36,6 +36,6 @@ void displayUpdate(bool setDefault,
                    blink_speed top,
                    blink_speed bottom,
                    bool miles,
-                   uint8_t battery,
+                   uint8_t batPercentage,
                    uint16_t topVal,
                    uint32_t bottomVal);

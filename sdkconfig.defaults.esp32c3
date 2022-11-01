@@ -25,13 +25,11 @@ CONFIG_ION_ADC=y
 # 330k & 22k
 # 360k & 24k
 
-# Real voltage (mv) = voltage (mv) * 16
-# 36V battery (peak voltage: 41-42V).
-# For a 36V battery we assume: Full = 42V. Empty = 30V. (difference = 12V)
-# (realvoltage - 30V)/12V * 100 -> that is the percentage of charge
+# The scale of the divider, times 1000
+CONFIG_ION_DIVIDER_SCALE=16000
 
-# 32,000 / 16
-CONFIG_ION_ADC_EMPTY_MV=2000
+# Consider 32V (3.2V/cell for 10s) empty
+CONFIG_ION_ADC_EMPTY_MV=32000
 
-# 42,000 / 16
-CONFIG_ION_ADC_FULL_MV=2625
+# Consider 42V (4.2V/cell for 10s) full
+CONFIG_ION_ADC_FULL_MV=42000

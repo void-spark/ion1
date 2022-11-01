@@ -2,13 +2,13 @@
 CONFIG_ION_LIGHT_PIN_INVERTED=n
 CONFIG_ION_RELAY_PIN_INVERTED=n
 
-# Divider: 10k/1k (scale = 11.0)
-# 7S battery:
-# Empty = 3.2V * 7 = 22.4v
-# Full = 4.2V * 7 =29.4v
+# Divider: 100k/10k (scale = 11.0)
 
-# 22,400mv  / 11.0
-CONFIG_ION_ADC_EMPTY_MV=2036
+# The scale of the divider, times 1000
+CONFIG_ION_DIVIDER_SCALE=11000
 
-# 29,400mv  / 11.0
-CONFIG_ION_ADC_FULL_MV=2672
+# Consider 22.4V (3.2V/cell for 7s) empty
+CONFIG_ION_ADC_EMPTY_MV=22400
+
+# Consider 29.4V (4.2V/cell for 7s) full
+CONFIG_ION_ADC_FULL_MV=29400
