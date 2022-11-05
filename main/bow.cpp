@@ -218,7 +218,7 @@ void writeMessage(uint8_t *message, uint8_t messageLen) {
     uart_write_bytes(UART_NUM, escaped, outPos);
 }
 
-void writeMessage(messageType message) {
+void writeMessage(const messageType& message) {
     uint8_t data[18] = {};
     size_t length = 1;
     data[0] = nibbles(message.target, message.type);
@@ -234,7 +234,7 @@ void writeMessage(messageType message) {
     writeMessage(data, length);
 }
 
-readResult exchange(messageType outMessage, messageType *inMessage, const TickType_t timeout) {
+readResult exchange(const messageType& outMessage, messageType *inMessage, const TickType_t timeout) {
     writeMessage(outMessage);
     readResult result;
     while(true) {
@@ -255,11 +255,11 @@ readResult exchange(messageType outMessage, messageType *inMessage, const TickTy
     return result;
 }
 
-readResult exchange(messageType outMessage, messageType *inMessage) { 
+readResult exchange(const messageType& outMessage, messageType *inMessage) { 
     return exchange(outMessage, inMessage, 0); 
 }
 
-void exchange(messageType outMessage) {
+void exchange(const messageType& outMessage) {
     messageType response = {};
     readResult result = exchange(outMessage, &response);
 }

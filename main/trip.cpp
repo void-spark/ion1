@@ -3,7 +3,7 @@
 
 #define DISTANCE_FILE "/spiffs/distance.bin"
 
-typedef struct distancesStruct {
+struct distancesStruct {
     // Trip-1 in 10m increments
     uint32_t trip1;
 

@@ -45,7 +45,7 @@ enum readResult {
 void initUart();
 readResult readMessage(messageType *message, TickType_t timeout);
 readResult readMessage(messageType *message);
-void writeMessage(messageType message);
-readResult exchange(messageType outMessage, messageType *inMessage, const TickType_t timeout);
-readResult exchange(messageType outMessage, messageType *inMessage);
-void exchange(messageType outMessage);
+void writeMessage(const messageType& message);
+readResult exchange(const messageType& outMessage, messageType *inMessage, const TickType_t timeout);
+readResult exchange(const messageType& outMessage, messageType *inMessage);
+void exchange(const messageType& outMessage);

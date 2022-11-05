@@ -39,14 +39,14 @@ void displayUpdateCu3(display_type type, bool screen, bool light, bool battery2,
 /**
  * The max value for batVal (100%)
  */
-uint16_t cu3BatMaxValue() {
+static uint16_t cu3BatMaxValue() {
     return 11000;
 }
 
 /** 
  * Calculate the Bat. value for CU3, range is something like -10% - 100%
 */
-uint16_t toCu3BatValue(uint8_t batPercentage) {
+static uint16_t toCu3BatValue(uint8_t batPercentage) {
 
     uint16_t batMax = cu3BatMaxValue(); 
 
@@ -57,4 +57,22 @@ uint16_t toCu3BatValue(uint8_t batPercentage) {
     uint32_t onePercentK = (9 * batMax);
     uint32_t valueK = offsetK + onePercentK * batPercentage + onePercentK / 2;
     return (uint16_t) (valueK / 1000);
+}
+
+bool handleCu3Message(const messageType& message, uint8_t batPercentage) {
+    if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x18) {
+        // GET DATA 1418 14:18(Battery level)
+        uint16_t batVal = toCu3BatValue(batPercentage);
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], (uint8_t)(batVal >> 8), (uint8_t)(batVal >> 0)};
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
+        return true;
+    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 4 && message.command == CMD_GET_DATA && message.payload[1] == 0x18 && message.payload[3] == 0x1a) {
+        // GET DATA 9418141a 14:18(Battery level) 14:1a(Max battery level)
+        uint16_t batVal = toCu3BatValue(batPercentage);
+        uint16_t batMax = cu3BatMaxValue();
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], (uint8_t)(batVal >> 8), (uint8_t)(batVal >> 0), message.payload[2], message.payload[3], (uint8_t)(batMax >> 8), (uint8_t)(batMax >> 0)};
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
+        return true;
+    }
+    return false;
 }
