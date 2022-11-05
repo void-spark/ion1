@@ -59,6 +59,7 @@ static const int IGNORE_HELD_BIT = BIT6;
 static const int WAKEUP_BIT = BIT7;
 static const int CALIBRATE_BIT = BIT8;
 static const int MOTOR_UPDATE_BIT = BIT9;
+static const int MEASURE_BAT_BIT = BIT10;
 
 static EventGroupHandle_t controlEventGroup;
 
@@ -104,8 +105,10 @@ static uint16_t speed;
 static bool motorOffAck = false;
 
 static TimerHandle_t motorUpdateTimer;
+static TimerHandle_t measureBatTimer;
 
 static void motorUpdateTimerCallback(TimerHandle_t xTimer) { xEventGroupSetBits(controlEventGroup, MOTOR_UPDATE_BIT); }
+static void measureBatTimerCallback(TimerHandle_t xTimer) { xEventGroupSetBits(controlEventGroup, MEASURE_BAT_BIT); }
 
 static messageHandlingResult handleMotorMessage() {
     messageType message = {};
@@ -542,6 +545,9 @@ static void my_task(void *pvParameter) {
 #endif
 
     motorUpdateTimer = xTimerCreate("motorUpdateTimer", (10000 / portTICK_PERIOD_MS), pdTRUE, (void *)0, motorUpdateTimerCallback);
+    measureBatTimer = xTimerCreate("measureBatTimer", (100 / portTICK_PERIOD_MS), pdTRUE, (void *)0, measureBatTimerCallback);
+
+    xTimerStart(measureBatTimer, 0);
 
     ion_state state = {
         .state = IDLE,
@@ -571,10 +577,6 @@ static void my_task(void *pvParameter) {
         const bool wakeup = (buttonBits & WAKEUP_BIT) != 0;
         const bool calibrate = (buttonBits & CALIBRATE_BIT) != 0;
 
-#if CONFIG_ION_ADC
-        measureBat();
-#endif
-
         if(lightShortPress) {
             toggleLight();
 #if CONFIG_ION_CU2 || CONFIG_ION_CU3
@@ -582,24 +584,40 @@ static void my_task(void *pvParameter) {
 #endif
         }
 
+EventBits_t bitsToCheck = 
 #if CONFIG_ION_CU2
-        EventBits_t bits = xEventGroupWaitBits(controlEventGroup, CHECK_BUTTON_BIT | DISPLAY_UPDATE_BIT | MOTOR_UPDATE_BIT, false, false, 0);
+    CHECK_BUTTON_BIT |
+#endif
+#if CONFIG_ION_CU2 || CONFIG_ION_CU3
+    DISPLAY_UPDATE_BIT |
+#endif
+#if CONFIG_ION_ADC
+    MEASURE_BAT_BIT |
+#endif
+    MOTOR_UPDATE_BIT;
+
+    EventBits_t bits = xEventGroupWaitBits(controlEventGroup, bitsToCheck, false, false, 0);
+#if CONFIG_ION_CU2
         if((bits & CHECK_BUTTON_BIT) != 0) {
             xEventGroupClearBits(controlEventGroup, CHECK_BUTTON_BIT);
             buttonCheck();
         } else
-#elif CONFIG_ION_CU3
-        EventBits_t bits = xEventGroupWaitBits(controlEventGroup, DISPLAY_UPDATE_BIT | MOTOR_UPDATE_BIT, false, false, 0);
 #endif
 #if CONFIG_ION_CU2 || CONFIG_ION_CU3
          if((bits & DISPLAY_UPDATE_BIT) != 0) {
             xEventGroupClearBits(controlEventGroup, DISPLAY_UPDATE_BIT);
 #if CONFIG_ION_CU2
             showState(level, getLight(), speed, getTrip1(), getBatPercentage());
-#elif CONFIG_ION_CU3
+#else
             showStateCu3(level, state.displayOn, getLight(), speed, getTrip1(), getTrip2());
 #endif
         } else 
+#endif
+#if CONFIG_ION_ADC
+        if((bits & MEASURE_BAT_BIT) != 0) {
+            xEventGroupClearBits(controlEventGroup, MEASURE_BAT_BIT);
+            measureBat();
+        } else
 #endif
         if((bits & MOTOR_UPDATE_BIT) != 0) {
             xEventGroupClearBits(controlEventGroup, MOTOR_UPDATE_BIT);
