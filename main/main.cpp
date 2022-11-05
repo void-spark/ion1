@@ -595,7 +595,7 @@ static void my_task(void *pvParameter) {
          if((bits & DISPLAY_UPDATE_BIT) != 0) {
             xEventGroupClearBits(controlEventGroup, DISPLAY_UPDATE_BIT);
 #if CONFIG_ION_CU2
-            showState(level, getLight(), speed, getTrip1(), batPercentage);
+            showState(level, getLight(), speed, getTrip1(), getBatPercentage());
 #elif CONFIG_ION_CU3
             showStateCu3(level, state.displayOn, getLight(), speed, getTrip1(), getTrip2());
 #endif
