@@ -1,6 +1,7 @@
 #pragma once
 
 void adc_init();
-uint32_t measureBatMv();
-uint8_t batMvToPercentage(uint32_t batVoltageMv);
+void measureBat();
+uint32_t getBatMv();
+uint8_t getBatPercentage();
 void adc_teardown();

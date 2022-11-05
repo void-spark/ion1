@@ -13,6 +13,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "nvs_flash.h"
+#include "bytes.h"
 #include "button.h"
 #include "bow.h"
 #include "cmds.h"
@@ -99,27 +100,10 @@ static uint8_t level = 0x00;
 // Speed in km/h*10
 static uint16_t speed;
 
-// Time offset in seconds, add this to time since boot to get real time.
-static uint32_t offset = 0;
-
 // Motor indicates off is ready.
 static bool motorOffAck = false;
 
-// Use a fake value of 27.6v when we don't have ADC.
-static uint32_t batMv = 27600;
-
-// Use a fake value of 50% when we don't have ADC.
-static uint8_t batPercentage;
-
 static TimerHandle_t motorUpdateTimer;
-
-static uint16_t toUint16(uint8_t *buffer, size_t offset) { 
-    return ((uint16_t)buffer[offset] << 8) | ((uint16_t)buffer[offset + 1] << 0); 
-}
-
-static uint32_t toUint32(uint8_t *buffer, size_t offset) {
-    return ((uint32_t)buffer[offset] << 24) | ((uint32_t)buffer[offset + 1] << 16) | ((uint32_t)buffer[offset + 2] << 8) | ((uint32_t)buffer[offset + 3] << 0);
-}
 
 static void motorUpdateTimerCallback(TimerHandle_t xTimer) { xEventGroupSetBits(controlEventGroup, MOTOR_UPDATE_BIT); }
 
@@ -171,7 +155,7 @@ static messageHandlingResult handleMotorMessage() {
         writeMessage(cmdResp(message.source, MSG_BMS, message.command));
         return CONTROL_TO_SENDER;
 #if CONFIG_ION_CU3
-    } else if(handleCu3Message(message,batPercentage)) {
+    } else if(handleCu3Message(message)) {
         return CONTROL_TO_SENDER;
 #endif
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x2a) {
@@ -196,50 +180,6 @@ static messageHandlingResult handleMotorMessage() {
 
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x3b) {
-        // GET DATA 083b 08:3b(Distance to maintenance)
-        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x00, 0x01, 0xE2, 0x08};
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x80) {
-        // GET DATA 0880 08:80(Total distance)
-
-        uint32_t total = getTotal();
-        uint8_t byte0 = (total >> 24) & 0xff;
-        uint8_t byte1 = (total >> 16) & 0xff; 
-        uint8_t byte2 = (total >> 8) & 0xff;
-        uint8_t byte3 = total & 0xff;
-
-        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], byte0, byte1, byte2, byte3};
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x8e) {
-        // GET DATA 088e 08:8e(Time)
-
-        int64_t seconds = esp_timer_get_time() / (1000 * 1000) + offset;
-        uint8_t byte0 = (seconds >> 24) & 0xff;
-        uint8_t byte1 = (seconds >> 16) & 0xff; 
-        uint8_t byte2 = (seconds >> 8) & 0xff;
-        uint8_t byte3 = seconds & 0xff;
-
-        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], byte0, byte1, byte2, byte3};
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x94) {
-        // GET DATA 2894 28:94(Unknown)
-        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x40, 0x0e, 0x14, 0x7b};
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 3 && message.command == CMD_GET_DATA && message.payload[1] == 0x99 && message.payload[2] == 0x00) {
-        // GET DATA 489900 48:99[0](Trip time)
-        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf6};
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 3 && message.command == CMD_GET_DATA && message.payload[1] == 0x9a && message.payload[2] == 0x00) {
-        // GET DATA 449a00 44:9a[0](Max speed)
-        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x02, 0x00, 0x00, 0x00, 0xd0};
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
-        return CONTROL_TO_SENDER;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == CMD_PUT_DATA && message.payload[1] == 0xc0 && message.payload[5] == 0xc1) {
         // PUT DATA c0/c1
         speed = toUint16(message.payload, 2);
@@ -257,14 +197,6 @@ static messageHandlingResult handleMotorMessage() {
         if(!writeCalibrationData(message.payload)) {
             return CONTROL_TO_SENDER;
         }
-
-        uint8_t payload[] = {0x00};
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 6 && message.command == CMD_PUT_DATA && message.payload[1] == 0x8e) {
-        uint32_t newTime = toUint32(message.payload, 2);
-        int64_t seconds = esp_timer_get_time() / (1000 * 1000);
-        offset = newTime - seconds;
 
         uint8_t payload[] = {0x00};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
@@ -365,13 +297,13 @@ static void toMotorOffState(ion_state * state) {
  */
 static void motorUpdate() {
     uint16_t unknown = 2500; // Normally 2500, very sometimes much lower, on low battery up hill? Amp limit in 10ma??
-    uint16_t volts = batMv / 100; // Volts, in 100mv
+    uint16_t volts = getBatMv() / 100; // Volts, in 100mv
 
     uint8_t payload[] = {
-            0x94, 0xb0, 
-            (uint8_t)(unknown >> 8), (uint8_t)(unknown >> 0), 
-            0x14, 0xb1, 
-            (uint8_t)(volts >> 8), (uint8_t)(volts >> 0)};
+            0x94, 0xb0,
+            FROM_UINT16(unknown), 
+            0x14, 0xb1,
+            FROM_UINT16(volts)};
     exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_PUT_DATA, payload, sizeof(payload)));
 }
 
@@ -578,11 +510,6 @@ static void handleTurnMotorOffState(ion_state * state) {
                 toMotorOffState(state);
             }
     }
-}
-
-static void measureBat() {
-    batMv = measureBatMv();
-    batPercentage = batMvToPercentage(batMv);
 }
 
 static void my_task(void *pvParameter) {

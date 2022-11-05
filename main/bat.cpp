@@ -23,6 +23,12 @@ static bool cali_enable = false;
 static adc_oneshot_unit_handle_t adc1_handle = NULL;
 static adc_cali_handle_t adc1_cali_handle = NULL;
 
+// Use a fake value of 27.6v when we don't have ADC.
+static uint32_t batMv = 27600;
+
+// Use a fake value of 50% when we don't have ADC.
+static uint8_t batPercentage = 50;
+
 static void adc_calibration_init(adc_unit_t unit, adc_atten_t atten) {
     esp_err_t ret = ESP_FAIL;
 
@@ -103,7 +109,7 @@ uint32_t measureBatMv() {
     return 0x00;
 }
 
-uint8_t batMvToPercentage(uint32_t batMv) {
+static uint8_t batMvToPercentage(uint32_t batMv) {
 
     // Get lower/upper limit from configuration
     uint32_t emptyMv = CONFIG_ION_ADC_EMPTY_MV;
@@ -123,6 +129,20 @@ uint8_t batMvToPercentage(uint32_t batMv) {
     }
 
     return batterypercentage;
+}
+
+
+void measureBat() {
+    batMv = measureBatMv();
+    batPercentage = batMvToPercentage(batMv);
+}
+
+uint32_t getBatMv() {
+    return batMv;
+}
+
+uint8_t getBatPercentage() {
+    return batPercentage;
 }
 
 void adc_teardown() {
