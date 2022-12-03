@@ -100,15 +100,17 @@ void adc_init() {
 uint32_t measureBatMv() {
     int adc_raw = 0;
     ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC1_CHAN, &adc_raw));
+    int adcVoltageMv = 0;
     if (cali_enable) {
-        int adcVoltageMv = 0;
         ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_handle, adc_raw, &adcVoltageMv));
-
-        // Calculate actual voltage in mv
-        return (adcVoltageMv * CONFIG_ION_DIVIDER_SCALE) / 1000;
+    } else {
+        // ADC_BITWIDTH_DEFAULT means use max bits, which is SOC_ADC_RTC_MAX_BITWIDTH
+        // 11DB is a factor 3.55, and base reference voltage is 1V (I think)
+        adcVoltageMv = (adc_raw * 3550) / (1 << SOC_ADC_RTC_MAX_BITWIDTH);
     }
 
-    return 0x00;
+    // Calculate actual voltage in mv
+    return (adcVoltageMv * CONFIG_ION_DIVIDER_SCALE) / 1000;
 }
 
 static uint8_t batMvToPercentage(uint32_t batMv) {
