@@ -21,6 +21,8 @@ void startButtonCheck();
 
 void stopButtonCheck();
 
+void ignorePress();
+
 void showState(uint8_t level, bool lightOn, uint16_t speed, uint32_t trip, uint8_t batPercentage);
 
 void displayUpdate(bool setDefault,

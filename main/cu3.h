@@ -3,6 +3,7 @@
 #include "sdkconfig.h"
 #if CONFIG_ION_CU3
 
+#include "bow.h"
 #include <sys/unistd.h>
 
 enum display_type { DSP_SCREEN = 0, DSP_BAT_CHARGE, DSP_BAT };
