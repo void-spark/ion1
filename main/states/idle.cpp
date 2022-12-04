@@ -30,8 +30,10 @@ void handleIdleState(ion_state * state, bool modeShortPress) {
     if(result == MSG_WAKEUP) {
         // Received a '0x00' byte, sent when connecting a display, or pressing a button while the display is 'sleeping'.        
         ESP_LOGI(TAG, "Wakeup!");
+#if CONFIG_ION_CU2
         // If the '0x00' byte is from pressing a CU2 button, we don't want to handle it again as a button press.
         ignorePress();
+#endif
         toTurnMotorOnState(state);
         return;
     }

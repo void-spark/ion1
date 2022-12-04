@@ -9,7 +9,7 @@
 static EventGroupHandle_t eventGroupHandle;
 
 #if CONFIG_ION_CU2 || CONFIG_ION_CU3
-static const int DISPLAY_UPDATE_BIT = BIT1;
+static const int DISPLAY_UPDATE_BIT = BIT0;
 #endif
 
 void initDisplay() {
