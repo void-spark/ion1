@@ -10,32 +10,33 @@
 // The amount of button updates (100ms) each for a long press
 #define LONG_PRESS_UPDATES 50
 
+static const int CHECK_BUTTON_BIT = BIT0;
+
 static TimerHandle_t buttonCheckTimer;
 
+static EventGroupHandle_t displayEventGroupHandle;
 static EventGroupHandle_t _eventGroupHandle;
 
 static int _buttonModeShortPressBit;
 static int _buttonModeLongPressBit;
 static int _buttonLightShortPressBit;
 static int _buttonLightLongPressBit;
-static int _checkButtonBit;
 static int _ignoreHeldBit;
 
-static void buttonCheckTimerCallback(TimerHandle_t xTimer) { xEventGroupSetBits(_eventGroupHandle, _checkButtonBit); }
+static void buttonCheckTimerCallback(TimerHandle_t xTimer) { xEventGroupSetBits(_eventGroupHandle, CHECK_BUTTON_BIT); }
 
 void initCu2(EventGroupHandle_t eventGroupHandle,
              const int buttonModeShortPressBit,
              const int buttonModeLongPressBit,
              const int buttonLightShortPressBit,
              const int buttonLightLongPressBit,
-             const int checkButtonBit,
              const int ignoreHeldBit) {
+    displayEventGroupHandle = xEventGroupCreate();
     _eventGroupHandle = eventGroupHandle;
     _buttonModeShortPressBit = buttonModeShortPressBit;
     _buttonModeLongPressBit = buttonModeLongPressBit;
     _buttonLightShortPressBit = buttonLightShortPressBit;
     _buttonLightLongPressBit = buttonLightLongPressBit;
-    _checkButtonBit = checkButtonBit;
     _ignoreHeldBit = ignoreHeldBit;
 
     buttonCheckTimer = xTimerCreate("buttonCheckTimer", (100 / portTICK_PERIOD_MS), pdTRUE, (void *)0, buttonCheckTimerCallback);
@@ -127,6 +128,19 @@ void showState(uint8_t level, bool lightOn, uint16_t speed, uint32_t trip, uint8
     uint32_t numBottom = digits(trip / 100, 5, 1);
     displayUpdate(false, (assist_level)level, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, lightOn ? BLNK_SOLID : BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID,
                   false, batPercentage, numTop, numBottom);
+}
+
+bool cu2HandleDisplayUpdate() {
+    EventBits_t bitsToCheck = CHECK_BUTTON_BIT;
+
+    EventBits_t bits = xEventGroupWaitBits(displayEventGroupHandle, bitsToCheck, false, false, 0);
+    if((bits & CHECK_BUTTON_BIT) != 0) {
+        xEventGroupClearBits(displayEventGroupHandle, CHECK_BUTTON_BIT);
+        buttonCheck();
+        return true;
+    }
+
+    return false;
 }
 
 void displayUpdate(bool setDefault,

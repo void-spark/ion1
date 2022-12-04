@@ -225,7 +225,6 @@ static void my_task(void *pvParameter) {
             BUTTON_MODE_LONG_PRESS_BIT, 
             BUTTON_LIGHT_SHORT_PRESS_BIT, 
             BUTTON_LIGHT_LONG_PRESS_BIT, 
-            CHECK_BUTTON_BIT,
             IGNORE_HELD_BIT
     );
 #endif

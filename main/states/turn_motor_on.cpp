@@ -6,6 +6,7 @@
 #include "relays.h"
 #include "bow.h"
 #include "cmds.h"
+#include "cu2.h"
 #include "cu3.h"
 #include "motor.h"
 #include "states.h"
