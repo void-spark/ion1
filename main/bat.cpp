@@ -120,7 +120,7 @@ static uint8_t batMvToPercentage(uint32_t batMv) {
     uint32_t fullMv = CONFIG_ION_ADC_FULL_MV;
 
     // Calculate the percentage
-    int32_t percentage = ((batMv - emptyMv) * 100) / (fullMv - emptyMv);
+    uint32_t percentage = (batMv < emptyMv) ? 0 : ((batMv - emptyMv) * 100) / (fullMv - emptyMv);
 
     // Limit to 0-100
     uint8_t batterypercentage = 0;
