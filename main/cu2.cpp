@@ -112,7 +112,7 @@ void ignorePress() {
     xEventGroupSetBits(_eventGroupHandle, _ignoreHeldBit); 
 }
 
-static uint32_t digits(uint32_t value, size_t digits, size_t atleast) {
+uint32_t digits(uint32_t value, size_t digits, size_t atleast) {
     uint32_t result = 0;
     uint32_t divider = 1;
     for(int pos = 0; pos < digits; pos++) {

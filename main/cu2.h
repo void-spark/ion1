@@ -24,6 +24,13 @@ void ignorePress();
 
 bool cu2HandleDisplayUpdate();
 
+/**
+ * Convert the given value to a value where each hexidecimal position shows a digit of the original value.
+ * @param digits the maximum amount of digits to convert.
+ * @param atleast the minimum amount of digits (in case of a 0 input value)
+ */
+uint32_t digits(uint32_t value, size_t digits, size_t atleast);
+
 void displayUpdateCu2(bool setDefault,
                    assist_level assistLevel,
                    blink_speed assistBlink,
