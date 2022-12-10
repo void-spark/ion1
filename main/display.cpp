@@ -24,9 +24,12 @@ void requestDisplayUpdate() {
 
 static void displayUpdate(ion_state * state) {
 #if CONFIG_ION_CU2
-            showState(state->level, getLight(), state->speed, getTrip1(), getBatPercentage());
+    uint16_t numTop = digits( state->speed, 3, 2);
+    uint32_t numBottom = digits(getTrip1() / 100, 5, 1);
+    displayUpdateCu2(false, (assist_level)state->level, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, getLight() ? BLNK_SOLID : BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID,
+                  false, getBatPercentage(), numTop, numBottom);
 #elif CONFIG_ION_CU3
-            showStateCu3(state->level, state->displayOn, getLight(), state->speed, getTrip1(), getTrip2());
+    displayUpdateCu3(DSP_SCREEN, state->displayOn, getLight(), false, state->level, state->speed, getTrip1(), getTrip2());
 #endif
 }
 

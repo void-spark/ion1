@@ -123,13 +123,6 @@ static uint32_t digits(uint32_t value, size_t digits, size_t atleast) {
     return result;
 }
 
-void showState(uint8_t level, bool lightOn, uint16_t speed, uint32_t trip, uint8_t batPercentage) {
-    uint16_t numTop = digits(speed, 3, 2);
-    uint32_t numBottom = digits(trip / 100, 5, 1);
-    displayUpdate(false, (assist_level)level, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, lightOn ? BLNK_SOLID : BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID,
-                  false, batPercentage, numTop, numBottom);
-}
-
 bool cu2HandleDisplayUpdate() {
     EventBits_t bitsToCheck = CHECK_BUTTON_BIT;
 
@@ -143,7 +136,7 @@ bool cu2HandleDisplayUpdate() {
     return false;
 }
 
-void displayUpdate(bool setDefault,
+void displayUpdateCu2(bool setDefault,
                    assist_level assistLevel,
                    blink_speed assistBlink,
                    blink_speed wrench,

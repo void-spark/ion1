@@ -56,7 +56,7 @@ void handleTurnMotorOnState(ion_state * state) {
         readResult result = exchange(cmdReq(MSG_DISPLAY, MSG_BMS, CMD_BUTTON_POLL, payload, sizeof(payload)), &message, 225 / portTICK_PERIOD_MS );
     } else if(state->step == 1) {
         // Update display
-        displayUpdate(false, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, true, 25, 0xccc, 0xccccc);
+        displayUpdateCu2(false, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, true, 25, 0xccc, 0xccccc);
     } else if(state->step == 2) {
         // Unknown command which is always the same and always sent to the
         // display at this point.
@@ -68,7 +68,7 @@ void handleTurnMotorOnState(ion_state * state) {
         startButtonCheck();
     } else if(state->step == 4) {
         // Set default display, which is shown if the display isn't updated for a bit (?)
-        displayUpdate(true, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, false, 10, 0xccc, 0xccccc);
+        displayUpdateCu2(true, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, false, 10, 0xccc, 0xccccc);
     } else 
 #else
     const uint8_t nextStep = 0;

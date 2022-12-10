@@ -14,11 +14,6 @@
 // Time offset in seconds, add this to time since boot to get real time.
 static uint32_t offset = 0;
 
-
-void showStateCu3(uint8_t level, bool screenOn, bool lightOn, uint16_t speed, uint32_t trip1, uint32_t trip2) {
-    displayUpdateCu3(DSP_SCREEN, screenOn, lightOn, false, level, speed, trip1, trip2);
-}
-
 /**
  * Pushes a display update to CU3
  * 
