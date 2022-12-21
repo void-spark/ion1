@@ -2,7 +2,7 @@
 
 #include <sys/unistd.h>
 
-enum control_state { IDLE, START_CALIBRATE, TURN_MOTOR_ON, MOTOR_ON, SET_ASSIST_LEVEL, TURN_MOTOR_OFF, MOTOR_OFF };
+enum control_state { IDLE, CHARGING, START_CALIBRATE, TURN_MOTOR_ON, MOTOR_ON, SET_ASSIST_LEVEL, TURN_MOTOR_OFF, MOTOR_OFF };
 
 struct ion_state {
     // The state we're in
@@ -41,6 +41,9 @@ void handleTurnMotorOnState(ion_state * state);
 
 void toMotorOnState(ion_state * state);
 void handleMotorOnState(ion_state * state, bool modeShortPress, bool lightLongPress, bool calibrate);
+
+void toChargingState(ion_state * state);
+void handleChargingState(ion_state * state, bool chargePin);
 
 void toCalibrateState(ion_state * state);
 void handleCalibrateState(ion_state * state);

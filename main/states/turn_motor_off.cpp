@@ -4,6 +4,7 @@
 #include "blink.h"
 #include "cmds.h"
 #include "bow.h"
+#include "display.h"
 #include "relays.h"
 #include "motor.h"
 #include "states.h"
@@ -27,6 +28,7 @@ void handleTurnMotorOffState(ion_state * state) {
     } else {
         if(state->step == 0) {
             stopMotorUpdates();
+            stopDisplayUpdates();
 
             state->motorOffAck = false;
             uint8_t payload[] = {0x00};

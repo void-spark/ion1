@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <sys/unistd.h>
 #include "sdkconfig.h"
 #include "soc/soc_caps.h"
@@ -46,6 +47,10 @@ static const char *TAG = "app";
 #if CONFIG_ION_BUTTON
     #define BUTTON (GPIO_NUM_0)
     #define BUTTON_EXT (GPIO_NUM_4)
+#endif
+
+#if CONFIG_ION_CHARGE
+    #define CHARGE_PIN ((gpio_num_t)CONFIG_ION_CHARGE_PIN)
 #endif
 
 static const int BUTTON_MODE_SHORT_PRESS_BIT = BIT0;
@@ -207,6 +212,16 @@ static void my_task(void *pvParameter) {
 
     initLight();
 
+#if CONFIG_ION_CHARGE
+    gpio_config_t io_conf = {};
+    io_conf.pin_bit_mask = BIT64(CHARGE_PIN);
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    ESP_ERROR_CHECK(gpio_config(&io_conf));
+#endif
+
     initBlink();
 
 #if CONFIG_ION_ADC
@@ -259,6 +274,15 @@ static void my_task(void *pvParameter) {
         // Serial should lead, buttons are uncommon.
         // Can we generate a eventgroup bit from uart?
 
+
+#if CONFIG_ION_CHARGE
+        // Charge pin is pulled to ground to activate.
+        const bool chargePin = gpio_get_level(CHARGE_PIN) == 0;
+        if(chargePin && state.state != CHARGING) {
+            toChargingState(&state);
+        }
+#endif
+
         EventBits_t buttonBits = xEventGroupWaitBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT | BUTTON_MODE_LONG_PRESS_BIT | BUTTON_LIGHT_SHORT_PRESS_BIT | BUTTON_LIGHT_LONG_PRESS_BIT | WAKEUP_BIT | CALIBRATE_BIT, true, false, 0);
         const bool modeShortPress = (buttonBits & BUTTON_MODE_SHORT_PRESS_BIT) != 0;
         const bool modeLongPress = (buttonBits & BUTTON_MODE_LONG_PRESS_BIT) != 0;
@@ -289,6 +313,10 @@ static void my_task(void *pvParameter) {
             handleTurnMotorOnState(&state);
         } else if(state.state == MOTOR_ON) {
             handleMotorOnState(&state, modeShortPress, lightLongPress, calibrate);
+#if CONFIG_ION_CHARGE
+        } else if(state.state == CHARGING)  {
+            handleChargingState(&state, chargePin);
+#endif
         } else if(state.state == START_CALIBRATE) {
             handleCalibrateState(&state);
         } else if(state.state == SET_ASSIST_LEVEL) {

@@ -3,6 +3,7 @@
 #include "freertos/event_groups.h"
 #include "esp_log.h"
 #include "blink.h"
+#include "display.h"
 #include "relays.h"
 #include "bow.h"
 #include "cmds.h"
@@ -42,7 +43,6 @@ void handleTurnMotorOnState(ion_state * state) {
 
 #if CONFIG_ION_CU3
     const uint8_t nextStep = 1;
-    // TODO: Update display every 1.5 second, unless already updated (from motor message)
     if(state->step == 0) {
         displayUpdateCu3(DSP_SCREEN, state->displayOn, true, false, 0, 0, 0, 0);
     } else 
@@ -73,6 +73,7 @@ void handleTurnMotorOnState(ion_state * state) {
 #else
     const uint8_t nextStep = 0;
 #endif
+    startDisplayUpdates();
     if(state->step == nextStep) {
         messageType message = {};
         // Motor on

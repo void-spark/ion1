@@ -31,6 +31,14 @@ menu "Sparta Ion Config"
         bool "Motor relay pin low for on"
         default n
 
+    config ION_CHARGE
+        bool "Enable pin to switch to charging mode"
+        default n
+
+    config ION_CHARGE_PIN
+        int "Charge input pin"
+        default 35
+
     config ION_CU2
         bool "Enable CU2 display support"
         default y
