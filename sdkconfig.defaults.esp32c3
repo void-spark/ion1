@@ -1,3 +1,17 @@
+# Configuration for use with T-01C3: https://github.com/Xinyuan-LilyGO/T-01C3
+#
+# Pins:
+# Pin# from schematic(GPIO#) - Name on (ESP-01) breakout board - Name on T-01C3 board
+# 1(--) - GND  - GND
+# 2(02) - GP2  - IO2 > Optional ADC use for battery level
+# 3(09) - GP0  - IO9 > Motor on/off (active low)
+# 4(20) - RXD  - RX  > Bus send
+# 5(21) - TXD  - TX  > Light on/off (active high) + jumper for debug
+# 6(08) - CHPD - IO8 > Bus receive
+# 7(--) - RST  - RST
+# 8(--) - VCC  - 3.3V
+
+
 CONFIG_ION_BUTTON=n
 CONFIG_ION_LED_PIN=3
 CONFIG_ION_UART=1
