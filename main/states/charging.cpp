@@ -1,4 +1,5 @@
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "bow.h"
 #include "cmds.h"
 #include "display.h"
@@ -8,6 +9,8 @@
 #include "states.h"
 
 static const char *TAG = "charging_state";
+
+static int64_t toChargingTime = 0;
 
 void toChargingState(ion_state * state) {
     state->state = CHARGING;
@@ -22,11 +25,14 @@ void toChargingState(ion_state * state) {
     // No need for these while charging.
     stopMotorUpdates();
 
-    queueBlink(5, 500, 500);
+    queueBlink(3, 400, 400);
 
     // Show charging on the display
     requestDisplayUpdate();
     startDisplayUpdates();
+
+    // Remember when we changed state.
+    toChargingTime = esp_timer_get_time();
 }
 
 void handleChargingState(ion_state * state, bool chargePin) {
@@ -45,14 +51,19 @@ void handleChargingState(ion_state * state, bool chargePin) {
         state->assistOn = false;
     }
 
-
     if(chargePin) {
         // Wait till someone unplugs the charger.
         return;
     }
 
-    setRelay(false);
-    // Go through the steps to fully turn motor on, seems a decent state to be in after charging, it will go back to off/idle if we don't move.
-    toTurnMotorOnState(state);
+    int64_t now = esp_timer_get_time();
+
+    // Wait at least 3 seconds
+    if(now - toChargingTime > 3 * 1000 * 1000 ) {
+        setRelay(false);
+        // Go through the steps to fully turn motor on, seems a decent state to be in after charging, it will go back to off/idle if we don't move.
+        toTurnMotorOnState(state);
+    }
+
     return;
 }
