@@ -23,6 +23,9 @@ jobs:
           - target: esp32
             display: cu3
             custom: wroom2xrelay
+          - target: esp32
+            display: cu2
+            custom: gpu7990
     steps:
     - name: Checkout repo
       uses: actions/checkout@v3
