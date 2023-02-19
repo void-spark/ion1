@@ -23,7 +23,7 @@ static int _buttonLightShortPressBit;
 static int _buttonLightLongPressBit;
 static int _ignoreHeldBit;
 
-static void buttonCheckTimerCallback(TimerHandle_t xTimer) { xEventGroupSetBits(_eventGroupHandle, CHECK_BUTTON_BIT); }
+static void buttonCheckTimerCallback(TimerHandle_t xTimer) { xEventGroupSetBits(displayEventGroupHandle, CHECK_BUTTON_BIT); }
 
 void initCu2(EventGroupHandle_t eventGroupHandle,
              const int buttonModeShortPressBit,
