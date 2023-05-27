@@ -13,6 +13,8 @@ CONFIG_ION_RELAY_PIN=32
 CONFIG_ION_RELAY_PIN_INVERTED=y
 
 CONFIG_ION_ADC=y
+# ADC channel 7 is pin 35
+CONFIG_ION_ADC_CHAN=7
 
 # 2.65V is 40.1V in realty due to voltage divider
 # Ratio is 40.1 / 2.65 = ~15.13 (measured scale, using this)

@@ -7,13 +7,6 @@
 
 static const char *TAG = "bat";
 
-// ADC Channel
-#if CONFIG_IDF_TARGET_ESP32
-#define ADC1_CHAN ADC_CHANNEL_7
-#else
-#define ADC1_CHAN ADC_CHANNEL_2
-#endif
-
 // ADC Attenuation
 // 11DB = 3.55 voltage gain, reference voltage should be around 1100mv,
 // so max theoretical measurement would be 3905mv, actual/recommended(?) is a lot lower.
@@ -92,14 +85,14 @@ void adc_init() {
     config.atten = ADC_ATTEN;
     config.bitwidth = ADC_BITWIDTH_DEFAULT;
 
-    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, ADC1_CHAN, &config));
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, (adc_channel_t)CONFIG_ION_ADC_CHAN, &config));
 
     adc_calibration_init(ADC_UNIT_1, ADC_ATTEN);
 }
 
 uint32_t measureBatMv() {
     int adc_raw = 0;
-    ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, ADC1_CHAN, &adc_raw));
+    ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, (adc_channel_t)CONFIG_ION_ADC_CHAN, &adc_raw));
     int adcVoltageMv = 0;
     if (cali_enable) {
         ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_handle, adc_raw, &adcVoltageMv));

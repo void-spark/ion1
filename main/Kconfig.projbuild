@@ -37,7 +37,7 @@ menu "Sparta Ion Config"
 
     config ION_CHARGE_PIN
         int "Charge input pin"
-        default 35
+        default 34
 
     config ION_CU2
         bool "Enable CU2 display support"
@@ -62,6 +62,10 @@ menu "Sparta Ion Config"
     config ION_ADC
         bool "Enable ADC for battery voltage measurement"
         default n
+
+    config ION_ADC_CHAN
+        int "ADC channel to use for voltage measurement"
+        default 7
 
     config ION_DIVIDER_SCALE
         int "The division of the voltage divider, times 1000. For example 150k & 10k resistor is: ((150 + 10) / 10) * 1000 = 16000."

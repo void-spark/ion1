@@ -29,6 +29,8 @@ CONFIG_ION_RELAY_PIN_INVERTED=y
 CONFIG_ESP32C3_DEFAULT_CPU_FREQ_160=y
 
 CONFIG_ION_ADC=y
+# ADC channel 2 is pin 2
+CONFIG_ION_ADC_CHAN=2
 
 # Voltage dividers with a factor of 16 tend to be easy to find resistors for:
 # 150k & 10k
