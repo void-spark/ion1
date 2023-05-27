@@ -1,0 +1,6 @@
+# Configuration that should match https://github.com/dvjcodec/SPARTA-ION-Controller/tree/main/Basic%20version%20with%20DEVKIT1%20ESP32
+CONFIG_ION_LIGHT_PIN_INVERTED=n
+CONFIG_ION_RELAY_PIN_INVERTED=n
+
+# ADC channel 6 is pin 34
+CONFIG_ION_ADC_CHAN=6

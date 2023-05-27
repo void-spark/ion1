@@ -26,6 +26,9 @@ jobs:
           - target: esp32
             display: cu2
             custom: gpu7990
+          - target: esp32
+            display: cu3
+            custom: dvjcodec
     steps:
     - name: Checkout repo
       uses: actions/checkout@v3
