@@ -30,6 +30,9 @@ jobs:
             display: cu3
             custom: gpu7990
           - target: esp32
+            display: cu2
+            custom: dvjcodec
+          - target: esp32
             display: cu3
             custom: dvjcodec
     steps:
