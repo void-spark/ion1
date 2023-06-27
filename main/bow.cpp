@@ -10,7 +10,7 @@
 
 static const char *TAG = "bow";
 
-#define UART_NUM (CONFIG_ION_UART)
+#define UART_NUM ((uart_port_t)CONFIG_ION_UART)
 #define TXD_PIN (CONFIG_ION_TXD)
 #define RXD_PIN (CONFIG_ION_RXD)
 

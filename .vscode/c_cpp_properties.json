@@ -15,7 +15,6 @@
                 "${workspaceFolder}/sdk/idf/components/cmock/CMock/src",
                 "${workspaceFolder}/sdk/idf/components/console",
                 "${workspaceFolder}/sdk/idf/components/driver/deprecated",
-                "${workspaceFolder}/sdk/idf/components/driver/esp32/include",
                 "${workspaceFolder}/sdk/idf/components/driver/include",
                 "${workspaceFolder}/sdk/idf/components/efuse/esp32/include",
                 "${workspaceFolder}/sdk/idf/components/efuse/include",
@@ -29,9 +28,7 @@
                 "${workspaceFolder}/sdk/idf/components/esp_common/include",
                 "${workspaceFolder}/sdk/idf/components/esp_eth/include",
                 "${workspaceFolder}/sdk/idf/components/esp_event/include",
-                "${workspaceFolder}/sdk/idf/components/esp_gdbstub/esp32",
                 "${workspaceFolder}/sdk/idf/components/esp_gdbstub/include",
-                "${workspaceFolder}/sdk/idf/components/esp_gdbstub/xtensa",
                 "${workspaceFolder}/sdk/idf/components/esp_hid/include",
                 "${workspaceFolder}/sdk/idf/components/esp_http_client/include",
                 "${workspaceFolder}/sdk/idf/components/esp_http_server/include",
@@ -81,8 +78,8 @@
                 "${workspaceFolder}/sdk/idf/components/lwip/include/apps",
                 "${workspaceFolder}/sdk/idf/components/lwip/include/apps/sntp",
                 "${workspaceFolder}/sdk/idf/components/lwip/lwip/src/include",
-                "${workspaceFolder}/sdk/idf/components/lwip/port/esp32/include",
-                "${workspaceFolder}/sdk/idf/components/lwip/port/esp32/include/arch",
+                "${workspaceFolder}/sdk/idf/components/lwip/port/esp32xx/include",
+                "${workspaceFolder}/sdk/idf/components/lwip/port/esp32xx/include/arch",
                 "${workspaceFolder}/sdk/idf/components/mbedtls/esp_crt_bundle/include",
                 "${workspaceFolder}/sdk/idf/components/mbedtls/mbedtls/include",
                 "${workspaceFolder}/sdk/idf/components/mbedtls/mbedtls/library",
@@ -115,22 +112,22 @@
                 "${workspaceFolder}/sdk/idf/components/wpa_supplicant/port/include",
                 "${workspaceFolder}/sdk/idf/components/xtensa/esp32/include",
                 "${workspaceFolder}/sdk/idf/components/xtensa/include",
-                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/xtensa-esp32-elf/include",
-                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/xtensa-esp32-elf/sys-include",
-                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/xtensa-esp32-elf/include/c++/11.2.0",
-                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/xtensa-esp32-elf/include/c++/11.2.0/xtensa-esp32-elf",
-                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/xtensa-esp32-elf/include/c++/11.2.0/backward",
-                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/lib/gcc/xtensa-esp32-elf/11.2.0/include",
-                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/lib/gcc/xtensa-esp32-elf/11.2.0/include-fixed"
+                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/xtensa-esp32-elf/include",
+                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/xtensa-esp32-elf/sys-include",
+                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/xtensa-esp32-elf/include/c++/12.2.0",
+                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/xtensa-esp32-elf/include/c++/12.2.0/xtensa-esp32-elf",
+                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/xtensa-esp32-elf/include/c++/12.2.0/backward",
+                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/lib/gcc/xtensa-esp32-elf/12.2.0/include",
+                "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/lib/gcc/xtensa-esp32-elf/12.2.0/include-fixed"
             ],
             "browse": {
                 "path": [
                     "${workspaceFolder}",
                     "${workspaceFolder}/components",
                     "${workspaceFolder}/sdk/idf/components",
-                    "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/xtensa-esp32-elf/include/c++/11.2.0",
-                    "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/lib/gcc/xtensa-esp32-elf/11.2.0",
-                    "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/xtensa-esp32-elf"
+                    "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/xtensa-esp32-elf/include/c++/12.2.0",
+                    "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/lib/gcc/xtensa-esp32-elf/12.2.0",
+                    "${workspaceFolder}/sdk/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/xtensa-esp32-elf"
                 ],
                 "limitSymbolsToIncludedHeaders": true,
                 "databaseFilename": ""
@@ -146,7 +143,7 @@
                 "_GNU_SOURCE",
                 "_POSIX_READER_WRITER_LOCKS",
                 "configENABLE_FREERTOS_DEBUG_OCDAWARE=1",
-                // /opt/esp/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/bin/xtensa-esp32-elf-g++ -E -dM - < /dev/null | sort
+                // /opt/esp/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-g++ -E -dM - < /dev/null | sort
                 "__ATOMIC_ACQUIRE=2",
                 "__ATOMIC_ACQ_REL=4",
                 "__ATOMIC_CONSUME=1",
