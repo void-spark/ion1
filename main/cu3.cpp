@@ -11,8 +11,10 @@
 
 #include "cu3.h"
 
-// Time offset in seconds, add this to time since boot to get real time.
-static uint32_t offset = 0;
+// Time offset in seconds, add this to time since boot to get real time. Could end up negative!
+static int32_t offset = 0;
+
+static const uint32_t seconds24h = 60 * 60 * 24;
 
 /**
  * Pushes a display update to CU3
@@ -65,6 +67,20 @@ static uint16_t toCu3BatValue(uint8_t batPercentage) {
     return (uint16_t) (valueK / 1000);
 }
 
+/**
+ * Get seconds since boot 
+ */
+static int64_t getSecondsSinceBoot() {
+    return esp_timer_get_time() / (1000 * 1000);
+}
+
+/**
+ * Get seconds to display, which has the offset applied and is limited to 24h.
+ */
+static uint32_t getSecondsDisplay() {
+    return (getSecondsSinceBoot() + seconds24h + offset) % seconds24h;
+}
+
 /** 
  * Handle the messages that seem to be sent by the CU3 only.
  */
@@ -82,8 +98,7 @@ bool handleCu3Message(const messageType& message) {
         return true;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x8e) {
         // GET DATA 088e 08:8e(Time)
-        int64_t seconds = esp_timer_get_time() / (1000 * 1000) + offset;
-        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], FROM_UINT32(seconds)};
+        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], FROM_UINT32(getSecondsDisplay())};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return true;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x18) {
@@ -117,8 +132,8 @@ bool handleCu3Message(const messageType& message) {
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 6 && message.command == CMD_PUT_DATA && message.payload[1] == 0x8e) {
         // PUT DATA 8e, (Time)
         uint32_t newTime = toUint32(message.payload, 2);
-        int64_t seconds = esp_timer_get_time() / (1000 * 1000);
-        offset = newTime - seconds;
+        uint32_t baseTime = (getSecondsSinceBoot() + seconds24h) % seconds24h;
+        offset = newTime - baseTime;
 
         uint8_t payload[] = {0x00};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
