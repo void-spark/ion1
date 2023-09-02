@@ -35,7 +35,8 @@ void motorUpdate() {
             FROM_UINT16(unknown), 
             0x14, 0xb1,
             FROM_UINT16(volts)};
-    exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_PUT_DATA, payload, sizeof(payload)));
+    messageType response = {};
+    readResult result = exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_PUT_DATA, payload, sizeof(payload)), &response, 225 / portTICK_PERIOD_MS);
 }
 
 void startMotorUpdates() {

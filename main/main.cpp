@@ -186,6 +186,7 @@ static bool handoff(ion_state * state) {
     writeMessage(handoffMsg(handoffTarget));
 
     while(true) {
+        // Keep handling responses, and subsequent incoming messages, until someone hands off back to us.
         messageHandlingResult result = handleMotorMessage(state);
         if(result == CONTROL_TO_US) {
             return true;
@@ -330,11 +331,14 @@ static void my_task(void *pvParameter) {
         if(state.doHandoffs) {
             if(!handoff(&state)) {
                 // Timeout, assume motor turned off. CU3 will keep chatting, so no timeout then.
+                // Could also have been a CRC error at some point, in that case we might have to start things back up.
 #if CONFIG_ION_CU2
                 stopButtonCheck();
 #endif
-                state.doHandoffs = false;
-                toIdleState(&state);
+                if(state.state == MOTOR_OFF) {
+                    state.doHandoffs = false;
+                    toIdleState(&state);
+                }
             }
         }
     }
