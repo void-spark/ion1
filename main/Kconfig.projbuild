@@ -3,6 +3,14 @@ menu "Sparta Ion Config"
         bool "Enable button"
         default y
 
+    config ION_BUTTON_BOARD_PIN
+        int "Board button pin"
+        default 0
+    
+    config ION_BUTTON_EXTERNAL_PIN
+        int "External button pin"
+        default 4
+    
     config ION_LED_PIN
         int "Led pin"
         default 2

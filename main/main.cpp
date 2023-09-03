@@ -45,8 +45,8 @@ static const char *TAG = "app";
 #endif
 
 #if CONFIG_ION_BUTTON
-    #define BUTTON (GPIO_NUM_0)
-    #define BUTTON_EXT (GPIO_NUM_4)
+    #define BUTTON ((gpio_num_t)CONFIG_ION_BUTTON_BOARD_PIN)
+    #define BUTTON_EXT ((gpio_num_t)CONFIG_ION_BUTTON_EXTERNAL_PIN)
 #endif
 
 #if CONFIG_ION_CHARGE
