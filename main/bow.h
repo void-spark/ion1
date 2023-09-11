@@ -30,6 +30,8 @@ struct messageType {
 };
 
 enum readResult {
+    // Time-out waiting for reply on each attempt.
+    MSG_NO_REPLY,
     // Reading timed out before getting a full message.
     MSG_TIMEOUT,
     // We got a '0x00' byte instead of a message.
@@ -46,6 +48,7 @@ void initUart();
 readResult readMessage(messageType *message, TickType_t timeout);
 readResult readMessage(messageType *message);
 void writeMessage(const messageType& message);
+readResult exchange(const messageType& outMessage, messageType *inMessage, const TickType_t timeout, const uint32_t attempts);
 readResult exchange(const messageType& outMessage, messageType *inMessage, const TickType_t timeout);
 readResult exchange(const messageType& outMessage, messageType *inMessage);
 void exchange(const messageType& outMessage);

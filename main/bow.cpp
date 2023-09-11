@@ -234,14 +234,20 @@ void writeMessage(const messageType& message) {
     writeMessage(data, length);
 }
 
-readResult exchange(const messageType& outMessage, messageType *inMessage, const TickType_t timeout) {
+readResult exchange(const messageType& outMessage, messageType *inMessage, const TickType_t timeout, const uint32_t attempts) {
     writeMessage(outMessage);
+    uint32_t count = 1;
     readResult result;
     while(true) {
         result = readMessage(inMessage, timeout);
         if(result == MSG_TIMEOUT) {
-            // Retry
+            if(attempts > 0 && count >= attempts) {
+                ESP_LOGE(TAG, "Out of attempts sending command %02x", outMessage.command);
+                return MSG_NO_REPLY;
+            }
+            // Retry by sending the message again
             writeMessage(outMessage);
+            count++;
         } else if(result == MSG_OK && inMessage->target == 0x02) {
             // We got our response
             break;
@@ -253,6 +259,10 @@ readResult exchange(const messageType& outMessage, messageType *inMessage, const
     }
 
     return result;
+}
+
+readResult exchange(const messageType& outMessage, messageType *inMessage, const TickType_t timeout) {
+    return exchange(outMessage, inMessage, timeout, 0); 
 }
 
 readResult exchange(const messageType& outMessage, messageType *inMessage) { 

@@ -61,7 +61,8 @@ void handleTurnMotorOnState(ion_state * state) {
         // Unknown command which is always the same and always sent to the
         // display at this point.
         uint8_t payload[] = {0x04, 0x08};
-        exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x25, payload, sizeof(payload)));
+        messageType message = {};
+        readResult result = exchange(cmdReq(MSG_DISPLAY, MSG_BMS, 0x25, payload, sizeof(payload)), &message, 50 / portTICK_PERIOD_MS, 5);
     } else if(state->step == 3) {
         // First normal button check command, after this should run every 100ms.
         buttonCheck();
