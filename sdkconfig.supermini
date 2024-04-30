@@ -1,0 +1,44 @@
+# Configuration for use with ESP32 C3 supermini and APM power module
+# https://nl.aliexpress.com/item/1005006170575141.html
+# https://nl.aliexpress.com/item/1005005831224524.html
+
+# Pins:
+# 1(06) - GND  - GND
+# 2(04) - GP2  - IO2 > Optional ADC use for battery level, voltage
+# 3(06) - GP2  - IO2 > Optional ADC use for battery level, current
+# 4(??) - GP0  - IO9 > Motor on/off (active low)
+# 5(??) - TXD  - TX  > Light on/off (active high) + jumper for debug
+# 6(20) - RXD  - RX  > Bus send
+# 7(21) - TXD  - TX  > Bus receive
+# 8(07) - VCC  - 5V
+
+
+CONFIG_ION_BUTTON=n
+CONFIG_ION_LED_PIN=8
+
+CONFIG_ION_UART=1
+CONFIG_ION_RXD=20
+CONFIG_ION_TXD=21
+ 
+CONFIG_ION_LIGHT=n
+# CONFIG_ION_LIGHT_PIN=21
+# CONFIG_ION_LIGHT_PIN_INVERTED=n
+
+CONFIG_ION_RELAY=n
+# CONFIG_ION_RELAY_PIN=9
+# CONFIG_ION_RELAY_PIN_INVERTED=y
+
+CONFIG_ESP32C3_DEFAULT_CPU_FREQ_160=y
+
+CONFIG_ION_ADC=y
+# ADC channel 2 is pin 2
+CONFIG_ION_ADC_CHAN=4
+
+# The scale of the divider, times 1000, from APM power module
+CONFIG_ION_DIVIDER_SCALE=10829
+
+# Consider 20V (3.2V/cell for 6s) empty
+CONFIG_ION_ADC_EMPTY_MV=20000
+
+# Consider 25.2V (4.2V/cell for 6s) full
+CONFIG_ION_ADC_FULL_MV=25200
