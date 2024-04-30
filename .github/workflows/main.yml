@@ -35,6 +35,9 @@ jobs:
           - target: esp32
             display: cu3
             custom: dvjcodec
+          - target: esp32c3
+            display: cu2
+            custom: supermini
     steps:
     - name: Checkout repo
       uses: actions/checkout@v3
