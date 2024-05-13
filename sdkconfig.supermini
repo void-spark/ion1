@@ -37,8 +37,8 @@ CONFIG_ION_ADC_CHAN=4
 # The scale of the divider, times 1000, from APM power module
 CONFIG_ION_DIVIDER_SCALE=10829
 
-# Consider 20V (3.2V/cell for 6s) empty
-CONFIG_ION_ADC_EMPTY_MV=20000
+# Consider 18V (3.0V/cell for 6s) empty
+CONFIG_ION_ADC_EMPTY_MV=18000
 
 # Consider 25.2V (4.2V/cell for 6s) full
 CONFIG_ION_ADC_FULL_MV=25200
