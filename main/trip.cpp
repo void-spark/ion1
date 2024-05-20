@@ -18,6 +18,10 @@ static distancesStruct distances;
 
 static uint32_t lastDistance = 0;
 
+void resetTrip1(uint32_t distance) {
+	distances.trip1 =  distance;
+}
+
 uint32_t getTrip1() {
     return distances.trip1;
 }
