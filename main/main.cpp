@@ -297,6 +297,10 @@ static void my_task(void *pvParameter) {
             requestDisplayUpdate();
         }
 
+        if(modeLongPress) {
+            resetTrip1(0);
+            requestDisplayUpdate();
+        }
 
 #if CONFIG_ION_ADC
         EventBits_t bitsToCheck = MEASURE_BAT_BIT;
