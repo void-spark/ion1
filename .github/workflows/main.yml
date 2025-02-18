@@ -61,7 +61,7 @@ jobs:
         target: ${{ matrix.target }}
         path: ''
 
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: firmware-${{ matrix.target }}-${{ matrix.display }}-${{ matrix.custom }}
         path: |
