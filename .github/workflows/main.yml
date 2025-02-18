@@ -38,6 +38,9 @@ jobs:
           - target: esp32c3
             display: cu2
             custom: supermini
+          - target: esp32c3
+            display: cu3
+            custom: supermini
     steps:
     - name: Checkout repo
       uses: actions/checkout@v3
