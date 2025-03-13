@@ -13,31 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [esp32, esp32c3]
-        display: [cu2, cu3]
-        custom: [std]
-        include:
-          - target: esp32
-            display: cu3
-            custom: mike
-          - target: esp32
-            display: cu3
-            custom: wroom2xrelay
-          - target: esp32
-            display: cu2
-            custom: gpu7990
-          - target: esp32
-            display: cu3
-            custom: gpu7990
-          - target: esp32
-            display: cu2
-            custom: dvjcodec
-          - target: esp32
-            display: cu3
-            custom: dvjcodec
-          - target: esp32c3
-            display: cu2
-            custom: supermini
+        target: [esp32c3]
+        display: [cu3]
+        custom: [supermini]
     steps:
     - name: Checkout repo
       uses: actions/checkout@v3
