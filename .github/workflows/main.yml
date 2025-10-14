@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         target: [esp32c3]
-        display: [cu3]
+        display: [cu2, cu3]
         custom: [supermini]
     steps:
     - name: Checkout repo
