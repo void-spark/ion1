@@ -35,7 +35,7 @@ void handleMotorOnState(ion_state * state, bool modeShortPress, bool lightLongPr
         state->step++;
     }
 
-    if(now -lastMoving > 10 * 1000 * 1000 ) {
+    if(now -lastMoving > 3 * 1000 * 1000 ) {
         toTurnMotorOffState(state);
         return;
     }
