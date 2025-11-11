@@ -32,7 +32,7 @@ CONFIG_ESP32C3_DEFAULT_CPU_FREQ_160=y
 
 CONFIG_ION_ADC=y
 # ADC channel 1 is pin 4
-CONFIG_ION_ADC_CHAN=4
+CONFIG_ION_ADC_CHAN=2
 
 # The scale of the divider, times 1000, from APM power module
 CONFIG_ION_DIVIDER_SCALE=10829
