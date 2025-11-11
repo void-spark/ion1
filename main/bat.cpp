@@ -20,9 +20,11 @@ static adc_cali_handle_t adc1_cali_handle = NULL;
 static uint32_t batMv = 27600;
 
 // We try to measure every 100ms, so 100 points gives us 10 seconds history.
-static uint8_t history[100];
-static size_t historyIndex = 0;
-static size_t historySize = 0;
+static uint32_t history;
+static uint8_t batPercentage;
+
+// static size_t historyIndex = 0;
+// static size_t historySize = 0;
 
 static void adc_calibration_init(adc_unit_t unit, adc_atten_t atten) {
     esp_err_t ret = ESP_FAIL;
@@ -130,11 +132,12 @@ static uint8_t batMvToPercentage(uint32_t batMv) {
 
 void measureBat() {
     batMv = measureBatMv();
-    history[historyIndex] = batMvToPercentage(batMv);
-    historyIndex = (historyIndex + 1) % sizeof(history);
-    if(historySize < sizeof(history)) {
-        historySize++;
-    }
+
+	history += batMv;
+	uint32_t avg = history >> 7;
+	history -= avg;
+
+	batPercentage = batMvToPercentage(avg);
 }
 
 uint32_t getBatMv() {
@@ -142,17 +145,12 @@ uint32_t getBatMv() {
 }
 
 uint8_t getBatPercentage() {
-    if(historySize == 0) {
+    if(batPercentage == 0) {
         // Use a fake value of 50% when we don't have ADC.
         return 50;
     }
 
-    uint32_t historyTotal = 0;
-    for(int index = 0; index < historySize; index++) {
-        historyTotal += history[index];
-    }
-
-    return historyTotal / historySize;
+    return batPercentage;
 }
 
 void adc_teardown() {
