@@ -83,7 +83,7 @@ static void measureBatTimerCallback(TimerHandle_t xTimer) { xEventGroupSetBits(c
 
 static void checkMyTaskHealth(TimerHandle_t xTimer) {
     if (!myTaskAlive) {
-		saveDistances();
+	saveDistances();
         saveCharge();
         esp_restart();
     }
@@ -265,8 +265,8 @@ static void my_task(void *pvParameter) {
     measureBatTimer = xTimerCreate("measureBatTimer", (100 / portTICK_PERIOD_MS), pdTRUE, (void *)0, measureBatTimerCallback);
     xTimerStart(measureBatTimer, 0);
 	
-	healthCheckTimer = xTimerCreate("healthCheckTimer", 60000 / portTICK_PERIOD_MS, pdTRUE, NULL, checkMyTaskHealth);
-	xTimerStart(healthCheckTimer, 0);
+    healthCheckTimer = xTimerCreate("healthCheckTimer", 60000 / portTICK_PERIOD_MS, pdTRUE, NULL, checkMyTaskHealth);
+    xTimerStart(healthCheckTimer, 0);
 
     ion_state state = {
         .state = IDLE,
