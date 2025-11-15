@@ -2,7 +2,7 @@
 
 #include <sys/unistd.h>
 
-void init_spiffs();
+void init_littlefs();
 
 // Is a calibration file stored?
 bool calibrationFileExists();

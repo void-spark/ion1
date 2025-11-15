@@ -4,7 +4,7 @@ CONFIG_ION_CU3=y
 # My chips are 4MB flash, once you use OTA this settings matters
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 
-# Set up partitions for SPIFFS
+# Set up partitions for littlefs
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
