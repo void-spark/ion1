@@ -98,7 +98,7 @@
                 "${workspaceFolder}/sdk/idf/components/soc/esp32/include",
                 "${workspaceFolder}/sdk/idf/components/soc/include",
                 "${workspaceFolder}/sdk/idf/components/spi_flash/include",
-                "${workspaceFolder}/sdk/idf/components/spiffs/include",
+                "${workspaceFolder}/sdk/idf/components/littlefs/include",
                 "${workspaceFolder}/sdk/idf/components/tcp_transport/include",
                 "${workspaceFolder}/sdk/idf/components/ulp/ulp_common/include",
                 "${workspaceFolder}/sdk/idf/components/ulp/ulp_common/include/esp32",
