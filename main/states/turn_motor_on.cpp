@@ -11,6 +11,8 @@
 #include "cu3.h"
 #include "motor.h"
 #include "states.h"
+#include "trip.h"
+#include "charge.h"
 
 static const char *TAG = "turn_motor_on_state";
 
@@ -56,7 +58,8 @@ void handleTurnMotorOnState(ion_state * state) {
         readResult result = exchange(cmdReq(MSG_DISPLAY, MSG_BMS, CMD_BUTTON_POLL, payload, sizeof(payload)), &message, 225 / portTICK_PERIOD_MS );
     } else if(state->step == 1) {
         // Update display
-        displayUpdateCu2(false, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, true, 25, 0xccc, 0xccccc);
+			//               assistLevel assistBlink wrench    total       trip      light     bars        comma       km          top         bottom      miles batPercentage topVal bottomVal
+        displayUpdateCu2(false, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, false, getChargePercentage(), 0xccc, 0xa0a0a);
     } else if(state->step == 2) {
         // Unknown command which is always the same and always sent to the
         // display at this point.
@@ -69,7 +72,9 @@ void handleTurnMotorOnState(ion_state * state) {
         startButtonCheck();
     } else if(state->step == 4) {
         // Set default display, which is shown if the display isn't updated for a bit (?)
-        displayUpdateCu2(true, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, false, 10, 0xccc, 0xccccc);
+			// setDefault   assistLevel assistBlink wrench    total       trip      light     bars        comma     km          top         bottom      miles batPercentage topVal bottomVal
+        // displayUpdateCu2(f, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, true, 100, 0xccc, 0xccccc);
+        displayUpdateCu2(true, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, false, getChargePercentage(), 0xccc, digits(getTotal(), 5, 1));
     } else 
 #else
     const uint8_t nextStep = 0;

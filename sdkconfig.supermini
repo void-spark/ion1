@@ -30,8 +30,16 @@ CONFIG_ION_LIGHT_PIN_INVERTED=n
 
 CONFIG_ESP32C3_DEFAULT_CPU_FREQ_160=y
 
+# --- ADC measuring ---
+# For ESP32-C3
+# ADC channel 0 is pin 0
+# ADC channel 1 is pin 1
+# ADC channel 2 is pin 2
+# ADC channel 3 is pin 3
+# ADC channel 4 is pin 4
 CONFIG_ION_ADC=y
-# ADC channel 1 is pin 4
+# --- Voltage measuring ---
+# ADC channel 1 is pin 2
 CONFIG_ION_ADC_CHAN=2
 
 # The scale of the divider, times 1000, from APM power module
@@ -43,3 +51,11 @@ CONFIG_ION_ADC_EMPTY_MV=21000
 # Consider 28V (3.5V/cell for 8s) full
 CONFIG_ION_ADC_FULL_MV=27000
 
+# --- Current measuring ---
+CONFIG_ION_CURR_ADC=y
+
+# ADC channel 2 is pin 1
+CONFIG_ION_CURR_ADC_CHAN=1
+
+# Full battery charge in mAh.
+CONFIG_ION_BAT_CHARGE=15000

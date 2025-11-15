@@ -31,6 +31,7 @@
 #include "motor.h"
 #include "relays.h"
 #include "trip.h"
+#include "charge.h"
 #include "states/states.h"
 #include "storage.h"
 
@@ -53,14 +54,14 @@ static const char *TAG = "app";
     #define CHARGE_PIN ((gpio_num_t)CONFIG_ION_CHARGE_PIN)
 #endif
 
-static const int BUTTON_MODE_SHORT_PRESS_BIT = BIT0;
-static const int BUTTON_MODE_LONG_PRESS_BIT = BIT1;
-static const int BUTTON_LIGHT_SHORT_PRESS_BIT = BIT2;
-static const int BUTTON_LIGHT_LONG_PRESS_BIT = BIT3;
-static const int IGNORE_HELD_BIT = BIT4;
-static const int WAKEUP_BIT = BIT5;
-static const int CALIBRATE_BIT = BIT6;
-static const int MEASURE_BAT_BIT = BIT7;
+static const int BUTTON_MODE_SHORT_PRESS_BIT   = BIT0;
+static const int BUTTON_MODE_LONG_PRESS_BIT    = BIT1;
+static const int BUTTON_LIGHT_SHORT_PRESS_BIT  = BIT2;
+static const int BUTTON_LIGHT_LONG_PRESS_BIT   = BIT3;
+static const int IGNORE_HELD_BIT               = BIT4;
+static const int WAKEUP_BIT                    = BIT5;
+static const int CALIBRATE_BIT                 = BIT6;
+static const int MEASURE_BAT_BIT               = BIT7;
 
 static EventGroupHandle_t controlEventGroup;
 
@@ -234,6 +235,7 @@ static void my_task(void *pvParameter) {
     initUart();
 
     loadDistances();
+    loadCharge();
 
 #if CONFIG_ION_CU2
     initCu2(controlEventGroup, 
@@ -285,12 +287,12 @@ static void my_task(void *pvParameter) {
 #endif
 
         EventBits_t buttonBits = xEventGroupWaitBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT | BUTTON_MODE_LONG_PRESS_BIT | BUTTON_LIGHT_SHORT_PRESS_BIT | BUTTON_LIGHT_LONG_PRESS_BIT | WAKEUP_BIT | CALIBRATE_BIT, true, false, 0);
-        const bool modeShortPress = (buttonBits & BUTTON_MODE_SHORT_PRESS_BIT) != 0;
-        const bool modeLongPress = (buttonBits & BUTTON_MODE_LONG_PRESS_BIT) != 0;
+        const bool modeShortPress  = (buttonBits & BUTTON_MODE_SHORT_PRESS_BIT)  != 0;
+        const bool modeLongPress   = (buttonBits & BUTTON_MODE_LONG_PRESS_BIT)   != 0;
         const bool lightShortPress = (buttonBits & BUTTON_LIGHT_SHORT_PRESS_BIT) != 0;
-        const bool lightLongPress = (buttonBits & BUTTON_LIGHT_LONG_PRESS_BIT) != 0;
-        const bool wakeup = (buttonBits & WAKEUP_BIT) != 0;
-        const bool calibrate = (buttonBits & CALIBRATE_BIT) != 0;
+        const bool lightLongPress  = (buttonBits & BUTTON_LIGHT_LONG_PRESS_BIT)  != 0;
+        const bool wakeup          = (buttonBits & WAKEUP_BIT)                   != 0;
+        const bool calibrate       = (buttonBits & CALIBRATE_BIT)                != 0;
 
         if(lightShortPress) {
             toggleLight();
@@ -299,6 +301,7 @@ static void my_task(void *pvParameter) {
 
         if(modeLongPress) {
             resetTrip1(0);
+            resetCharge();
             requestDisplayUpdate();
         }
 
@@ -307,7 +310,15 @@ static void my_task(void *pvParameter) {
         EventBits_t bits = xEventGroupWaitBits(controlEventGroup, bitsToCheck, false, false, 0);
         if((bits & MEASURE_BAT_BIT) != 0) {
             xEventGroupClearBits(controlEventGroup, MEASURE_BAT_BIT);
+
+            // Batterij meten
             measureBat();
+
+#if CONFIG_ION_CURR_ADC
+            // Stroom meten tegelijk
+            measureCurrent();
+            chargeUpdate(getBatMv(), getBatMa());
+#endif
         } else
 #endif
         if(handleDisplayUpdate(&state)) {
