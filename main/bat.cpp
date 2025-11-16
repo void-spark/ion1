@@ -19,12 +19,8 @@ static adc_cali_handle_t adc1_cali_handle = NULL;
 // Use a fake value of 27.6v when we don't have ADC.
 static uint32_t batMv = 27600;
 
-// We try to measure every 100ms, so 100 points gives us 10 seconds history.
 static uint32_t history;
 static uint8_t batPercentage;
-
-// static size_t historyIndex = 0;
-// static size_t historySize = 0;
 
 static void adc_calibration_init(adc_unit_t unit, adc_atten_t atten) {
     esp_err_t ret = ESP_FAIL;
@@ -133,6 +129,11 @@ static uint8_t batMvToPercentage(uint32_t batMv) {
 void measureBat() {
     batMv = measureBatMv();
 
+	// This is provided by 'mooiweertje' and is pretty much similar to Simple Exponential Smoothing (https://en.wikipedia.org/wiki/Exponential_smoothing).
+	// By using an alpha of 1/128, and storing the smoothed value scaled by 128 in history, this can be written very efficiently though,
+	// and the scaled value allows us to work with integers instead of floating point.
+	// It should take about 5 x 128 (640) calls to settle on a value (at 99.3%), and we try to measure every 100ms,
+	// which puts us a bit over 60 seconds. That's quite slow, but for a battery indicator should be ok.
 	history += batMv;
 	uint32_t avg = history >> 7;
 	history -= avg;
