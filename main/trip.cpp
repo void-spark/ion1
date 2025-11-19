@@ -1,7 +1,7 @@
 #include "storage.h"
 #include "trip.h"
 
-#define DISTANCE_FILE "/littleFS/distance.bin"
+#define DISTANCE_FILE "/littlefs/distance.bin"
 
 struct distancesStruct {
     // Trip-1 in 10m increments
