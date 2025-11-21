@@ -65,7 +65,7 @@ static const int MEASURE_BAT_BIT               = BIT7;
 
 static EventGroupHandle_t controlEventGroup;
 
-volatile bool myTaskAlive = false;
+volatile bool myTaskAlive = true;
 
 enum messageHandlingResult {
     // We got a handoff back, so we get to send the next message
@@ -83,6 +83,8 @@ static void measureBatTimerCallback(TimerHandle_t xTimer) { xEventGroupSetBits(c
 
 static void checkMyTaskHealth(TimerHandle_t xTimer) {
     if (!myTaskAlive) {
+		saveDistances();
+        saveCharge();
         esp_restart();
     }
     myTaskAlive = false;  // Reset voor volgende check
@@ -280,7 +282,7 @@ static void my_task(void *pvParameter) {
 
     while(true) {
 
-        myTaskAlive = true;  // Teken van leven
+        myTaskAlive = true;  // sign of life
 
         // TODO:
         // More use of timeouts

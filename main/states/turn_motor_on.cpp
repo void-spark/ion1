@@ -59,7 +59,7 @@ void handleTurnMotorOnState(ion_state * state) {
     } else if(state->step == 1) {
         // Update display
 			//               assistLevel assistBlink wrench    total       trip      light     bars        comma       km          top         bottom      miles batPercentage topVal bottomVal
-        displayUpdateCu2(false, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, false, getChargePercentage(), 0xccc, 0xa0a0a);
+        displayUpdateCu2(false, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, false, getChargePercentage(), 0xccc, digits(getTotal() / 100, 5, 1));
     } else if(state->step == 2) {
         // Unknown command which is always the same and always sent to the
         // display at this point.
@@ -74,7 +74,7 @@ void handleTurnMotorOnState(ion_state * state) {
         // Set default display, which is shown if the display isn't updated for a bit (?)
 			// setDefault   assistLevel assistBlink wrench    total       trip      light     bars        comma     km          top         bottom      miles batPercentage topVal bottomVal
         // displayUpdateCu2(f, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, true, 100, 0xccc, 0xccccc);
-        displayUpdateCu2(true, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, false, getChargePercentage(), 0xccc, digits(getTotal(), 5, 1));
+        displayUpdateCu2(true, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, false, getChargePercentage(), 0xccc, digits(getTotal() / 100, 5, 1));
     } else 
 #else
     const uint8_t nextStep = 0;

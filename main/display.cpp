@@ -44,9 +44,9 @@ static void displayUpdate(ion_state * state) {
     uint16_t numTop = digits(state->speed, 3, 2);
     // uint16_t numTop = digits(getChargePercentage(), 3, 2);
 	//uint16_t numTop = digits(getBatMv(), 3, 2);
-    // uint32_t numBottom = digits(getTrip1() / 100, 5, 1);
+    uint32_t numBottom = digits(getTrip1() / 100, 5, 1);
     // uint32_t numBottom = digits(getBatMa(), 5, 1);
-    uint32_t numBottom = digits(getMah() / 1000, 5, 1);
+    // uint32_t numBottom = digits(getMah() / 1000, 5, 1);
     uint8_t batPercentage = getChargePercentage();
     displayUpdateCu2(false, // setDefault
                      (assist_level)state->level, // assistLevel
