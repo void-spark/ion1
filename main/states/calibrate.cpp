@@ -27,6 +27,7 @@ void handleCalibrateState(ion_state * state) {
 #if CONFIG_ION_CU2
     displayUpdateCu2(false, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, false, 0, 0xccc, 0xa0a0a);
     requestDisplayUpdate();
+	vTaskDelay(pdMS_TO_TICKS(1000));
 #endif
     if(state->step == 0) {
         exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_CALIBRATE));
