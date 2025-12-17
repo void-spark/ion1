@@ -87,4 +87,8 @@ menu "Sparta Ion Config"
         int "The actual battery voltage in mv for full (=100%). For example 42000mv for a 10s battery"
         default 42000
 
+    config CONFIG_ION_KEEPALIVE
+        bool "Enable keepalive heartbeat. Will reset the ESP32 when main loop is stuck for more than a minute."
+        default n
+
 endmenu
