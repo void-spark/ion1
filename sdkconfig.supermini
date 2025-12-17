@@ -59,3 +59,7 @@ CONFIG_ION_CURR_ADC_CHAN=1
 
 # Full battery charge in mAh.
 CONFIG_ION_BAT_CHARGE=20000
+
+# keepalive
+CONFIG_ION_KEEPALIVE=y
+

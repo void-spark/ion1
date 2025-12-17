@@ -65,8 +65,6 @@ static const int MEASURE_BAT_BIT               = BIT7;
 
 static EventGroupHandle_t controlEventGroup;
 
-volatile bool myTaskAlive = true;
-
 enum messageHandlingResult {
     // We got a handoff back, so we get to send the next message
     CONTROL_TO_US,
@@ -77,9 +75,12 @@ enum messageHandlingResult {
 };
 
 static TimerHandle_t measureBatTimer;
-TimerHandle_t healthCheckTimer ;
 
 static void measureBatTimerCallback(TimerHandle_t xTimer) { xEventGroupSetBits(controlEventGroup, MEASURE_BAT_BIT); }
+
+#if CONFIG_ION_KEEPALIVE
+volatile bool myTaskAlive = false;
+TimerHandle_t healthCheckTimer ;
 
 static void checkMyTaskHealth(TimerHandle_t xTimer) {
     if (!myTaskAlive) {
@@ -89,6 +90,8 @@ static void checkMyTaskHealth(TimerHandle_t xTimer) {
     }
     myTaskAlive = false;  // Reset voor volgende check
 }
+#endif
+
 
 static messageHandlingResult handleMotorMessage(ion_state * state) {
     messageType message = {};
@@ -265,8 +268,10 @@ static void my_task(void *pvParameter) {
     measureBatTimer = xTimerCreate("measureBatTimer", (100 / portTICK_PERIOD_MS), pdTRUE, (void *)0, measureBatTimerCallback);
     xTimerStart(measureBatTimer, 0);
 	
+#if CONFIG_ION_KEEPALIVE
     healthCheckTimer = xTimerCreate("healthCheckTimer", 60000 / portTICK_PERIOD_MS, pdTRUE, NULL, checkMyTaskHealth);
     xTimerStart(healthCheckTimer, 0);
+#endif
 
     ion_state state = {
         .state = IDLE,
@@ -282,7 +287,9 @@ static void my_task(void *pvParameter) {
 
     while(true) {
 
+#if CONFIG_ION_KEEPALIVE
         myTaskAlive = true;  // sign of life
+#endif
 
         // TODO:
         // More use of timeouts
