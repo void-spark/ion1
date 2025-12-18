@@ -13,9 +13,16 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        target: [esp32c3]
-        display: [cu2, cu3]
-        custom: [supermini]
+        include:
+          - target: esp32c3
+            display: cu2
+            custom: Tesla
+          - target: esp32c3
+            display: cu2
+            custom: TeslaS
+          - target: esp32c3
+            display: cu3
+            custom: TeslaTour
     steps:
     - name: Checkout repo
       uses: actions/checkout@v3
