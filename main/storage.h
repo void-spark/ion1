@@ -2,7 +2,11 @@
 
 #include <sys/unistd.h>
 
-void init_spiffs();
+#define DISTANCE_FILE "/spiffs/distance.bin"
+
+#define CHARGE_FILE "/spiffs/charge.bin"
+
+void init_fs();
 
 // Is a calibration file stored?
 bool calibrationFileExists();
