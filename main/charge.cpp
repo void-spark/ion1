@@ -2,8 +2,6 @@
 #include "storage.h"
 #include "charge.h"
 
-#define CHARGE_FILE "/littlefs/charge.bin"
-
 // note that Ah is not real Ah but a relative Ah measurement based on ADC and timer.
 
 struct chargeStruct {

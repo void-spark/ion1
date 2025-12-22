@@ -245,7 +245,7 @@ static void my_task(void *pvParameter) {
     adc_init();
 #endif
 
-    init_spiffs();
+    init_fs();
 
     initUart();
 

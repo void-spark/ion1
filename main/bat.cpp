@@ -151,11 +151,6 @@ static uint8_t batMvToPercentage(uint32_t batMv) {
 void measureBat() {
     batMv = measureBatMv();
 
-<<<<<<< HEAD
-    history += batMv;
-    uint32_t avg = history >> 7;
-    history -= avg;
-=======
 	// This is provided by 'mooiweertje' and is pretty much similar to Simple Exponential Smoothing (https://en.wikipedia.org/wiki/Exponential_smoothing).
 	// By using an alpha of 1/128, and storing the smoothed value scaled by 128 in history, this can be written very efficiently though,
 	// and the scaled value allows us to work with integers instead of floating point.
@@ -164,7 +159,6 @@ void measureBat() {
 	history += batMv;
 	uint32_t avg = history >> 7;
 	history -= avg;
->>>>>>> 9e922f8 (Add a bit of comments on the new adc code)
 
     batPercentage = batMvToPercentage(avg);
 }

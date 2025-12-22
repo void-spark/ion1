@@ -5,9 +5,7 @@
 
 static const char *TAG = "storage";
 
-#define CALIBRATION_FILE "/spiffs/calibration.bin"
-
-void init_spiffs() {
+void init_fs() {
     ESP_LOGI(TAG, "Initializing SPIFFS");
 
     esp_vfs_spiffs_conf_t spiffs_conf = {};
