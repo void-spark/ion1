@@ -2,9 +2,11 @@
 
 #include <sys/unistd.h>
 
-#define DISTANCE_FILE "/spiffs/distance.bin"
+#define CALIBRATION_FILE "/littlefs/calibration.bin"
 
-#define CHARGE_FILE "/spiffs/charge.bin"
+#define DISTANCE_FILE "/littlefs/distance.bin"
+
+#define CHARGE_FILE "/littlefs/charge.bin"
 
 void init_fs();
 

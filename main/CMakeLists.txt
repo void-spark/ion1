@@ -1,2 +1,4 @@
 idf_component_register(SRC_DIRS "." "states"
-                       INCLUDE_DIRS ".")
+    INCLUDE_DIRS "."
+    REQUIRES esp32-button driver esp_littlefs esp_timer nvs_flash esp_adc
+)

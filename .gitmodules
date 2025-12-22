@@ -10,3 +10,6 @@
 [submodule "components/esp32-button"]
 	path = components/esp32-button
 	url = https://github.com/void-spark/esp32-button.git
+[submodule "components/esp_littlefs"]
+	path = components/esp_littlefs
+	url = https://github.com/joltwallet/esp_littlefs.git
