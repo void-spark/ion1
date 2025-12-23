@@ -43,3 +43,6 @@ CONFIG_ION_ADC_EMPTY_MV=18000
 
 # Consider 25.2V (4.2V/cell for 6s) full
 CONFIG_ION_ADC_FULL_MV=25200
+
+# keepalive
+CONFIG_ION_KEEPALIVE=y
