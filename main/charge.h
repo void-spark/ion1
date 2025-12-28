@@ -1,17 +1,15 @@
 #pragma once
 
-#include <sys/unistd.h>
+#include <stdint.h>
 
-uint8_t getChargePercentage();
+uint8_t getChargePercentage(void);
 
-uint32_t getMv();
+uint32_t getMv(void);
 
-uint32_t getMah();
+uint32_t getMah(void);
 
 void chargeUpdate(uint32_t mv, uint32_t mah);
 
-void loadCharge();
+void loadCharge(void);
 
-void saveCharge();
-
-void resetCharge();
+void resetCharge(void);

@@ -84,8 +84,8 @@ TimerHandle_t healthCheckTimer ;
 
 static void checkMyTaskHealth(TimerHandle_t xTimer) {
     if (!myTaskAlive) {
-	saveDistances();
-        saveCharge();
+	batDataSave();
+        batDataSave();
         esp_restart();
     }
     myTaskAlive = false;  // Reset voor volgende check
@@ -150,21 +150,8 @@ static messageHandlingResult handleMotorMessage(ion_state * state) {
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_SENDER;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 4 && message.command == CMD_GET_DATA && message.payload[1] == 0x38 && message.payload[3] == 0x3a) {
-        // GET DATA 9438283a 14:38(Calibration A) 28:3a(Calibration B)
-        uint8_t payload[] = {0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // Data (last 10 bytes) to be replaced
-
-        if(calibrationFileExists()) {
-            if(!readCalibrationData(payload + 1)) {
-                return CONTROL_TO_SENDER;
-            }
-        } else {
-            // Backup data
-            // Gold small test: 94 38 4b 13 28 3a 3e 98 ed f3
-            uint8_t data[] = {0x94, 0x38, 0x4b, 0x15, 0x28, 0x3a, 0x3e, 0x91, 0x79, 0x50}; // This needs to be good calibration data!
-            memcpy(payload + 1, data, 10);
-        }
-
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
+        uint8_t *payload = calibrationLoad();
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, 11));
         return CONTROL_TO_SENDER;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == CMD_PUT_DATA && message.payload[1] == 0xc0 && message.payload[5] == 0xc1) {
         // PUT DATA c0/c1
@@ -177,7 +164,7 @@ static messageHandlingResult handleMotorMessage(ion_state * state) {
         return CONTROL_TO_SENDER;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == CMD_PUT_DATA && message.payload[1] == 0x38 && message.payload[5] == 0x3a) {
         // PUT DATA 38/3a
-        if(!writeCalibrationData(message.payload)) {
+        if(!calibrationSave(message.payload)) {
             return CONTROL_TO_SENDER;
         }
 
@@ -245,7 +232,7 @@ static void my_task(void *pvParameter) {
     adc_init();
 #endif
 
-    init_fs();
+    storageInit();
 
     initUart();
 

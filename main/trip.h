@@ -1,24 +1,21 @@
 #pragma once
 
-#include <sys/unistd.h>
+#include <stdint.h>
 
-// To reset on long press mode button
+// Reset Trip-1 (bijv. op long-press van mode-knop)
 void resetTrip1(uint32_t distance);
 
 // Trip-1 in 10m increments
-uint32_t getTrip1();
+uint32_t getTrip1(void);
 
 // Trip-2 in 10m increments
-uint32_t getTrip2();
+uint32_t getTrip2(void);
 
 // Total in 10m increments
-uint32_t getTotal();
+uint32_t getTotal(void);
 
-// Distance update from the motor, distance since motor power on in 10m increments
+// Distance update vanuit de motor (afstand sinds motor power-on)
 void distanceUpdate(uint32_t distance);
 
-// Load distances from flash
-void loadDistances();
-
-// Write distances to flash
-void saveDistances();
+// Laad trip-data uit NVS (via batData)
+void loadDistances(void);

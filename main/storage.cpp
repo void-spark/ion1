@@ -1,85 +1,132 @@
-#include <sys/stat.h>
-#include "esp_log.h"
-#include "esp_littlefs.h"
 #include "storage.h"
+#include "nvs_flash.h"
+#include "nvs.h"
+#include "esp_log.h"
+#include <string.h>     // <-- toegevoegd voor memcpy()
 
 static const char *TAG = "storage";
 
-void init_fs() {
-    ESP_LOGI(TAG, "Initializing LittleFS");
+#define NVS_NAMESPACE "storage"
+#define NVS_KEY_BATDATA "batdata"
+#define NVS_KEY_CALIB   "calibration"
 
-    esp_vfs_littlefs_conf_t conf = {
-        .base_path = "/littlefs",
-        .partition_label = "littlefs",   // moet overeenkomen met je partitions.csv
-        .partition = NULL,
-        .format_if_mount_failed = true,
-        .read_only = false,
-        .dont_mount = false,
-        .grow_on_mount = true
+// Centrale instantie van batData
+static struct batData bat;
+
+// -----------------------------------------------------------------------------
+// Initialisatie
+// -----------------------------------------------------------------------------
+
+void storageInit(void)
+{
+    // NVS init
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        nvs_flash_erase();
+        nvs_flash_init();
+    }
+
+    // Defaults voor batData
+    bat.trip1 = 0;
+    bat.trip2 = 0;
+    bat.total = 0;
+
+    bat.percentage = 0;
+    bat.mv = 0;
+    bat.mah = 0;
+
+    ESP_LOGI(TAG, "Storage initialized");
+}
+
+// -----------------------------------------------------------------------------
+// batData API
+// -----------------------------------------------------------------------------
+
+struct batData *batDataGet(void)
+{
+    return &bat;
+}
+
+bool batDataLoad(void)
+{
+    nvs_handle_t handle;
+    if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK)
+        return false;
+
+    size_t size = sizeof(bat);
+    esp_err_t err = nvs_get_blob(handle, NVS_KEY_BATDATA, &bat, &size);
+    nvs_close(handle);
+
+    return (err == ESP_OK);
+}
+
+bool batDataSave(void)
+{
+    nvs_handle_t handle;
+    if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK)
+        return false;
+
+    esp_err_t err = nvs_set_blob(handle, NVS_KEY_BATDATA, &bat, sizeof(bat));
+    if (err != ESP_OK) {
+        nvs_close(handle);
+        return false;
+    }
+
+    err = nvs_commit(handle);
+    nvs_close(handle);
+
+    return (err == ESP_OK);
+}
+
+// -----------------------------------------------------------------------------
+// Calibration API
+// -----------------------------------------------------------------------------
+
+uint8_t *calibrationLoad(void)
+{
+    static uint8_t payload[11];
+
+    // Byte 0 is altijd 0x00
+    payload[0] = 0x00;
+
+    // Fallback calibratie (10 bytes)
+    static const uint8_t fallback[10] = {
+        0x94, 0x38, 0x4b, 0x15, 0x28, 0x3a, 0x3e, 0x91, 0x79, 0x50
     };
 
-    ESP_ERROR_CHECK(esp_vfs_littlefs_register(&conf));
+    // Probeer calibratie uit NVS te lezen
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
 
-    size_t total = 0, used = 0;
-    esp_err_t ret = esp_littlefs_info(conf.partition_label, &total, &used);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to get LittleFS partition information (%s)", esp_err_to_name(ret));
-    } else {
-        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
-    }
-    
-    struct stat st;
-    if(stat(CALIBRATION_FILE, &st) == 0) {
-        FILE *fp = fopen(CALIBRATION_FILE, "r");
-        if(fp == NULL) {
-            ESP_LOGE(TAG, "Failed to open calibration file for reading");
-        } else {
-            uint8_t data[10];
-            size_t read = fread(data, 1, sizeof(data), fp);
-            fclose(fp);
-            ESP_LOGI(TAG, "Calibration file found. Size: %lu, content:", st.st_size);        
-            ESP_LOG_BUFFER_HEX(TAG, data, read);
+    if (err == ESP_OK) {
+        size_t size = 10;
+        err = nvs_get_blob(handle, NVS_KEY_CALIB, payload + 1, &size);
+        nvs_close(handle);
+
+        if (err == ESP_OK) {
+            return payload;    // Succesvol geladen
         }
     }
+
+    // Geen calibratie ? fallback
+    memcpy(payload + 1, fallback, 10);
+    return payload;
 }
 
-bool calibrationFileExists() {
-    return fileExists(CALIBRATION_FILE);
-}
+bool calibrationSave(uint8_t *source)
+{
+    nvs_handle_t handle;
+    if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK)
+        return false;
 
-bool readCalibrationData(uint8_t * target) {
-    return readData(CALIBRATION_FILE, target, 10);
-}
-
-bool writeCalibrationData(uint8_t * source){
-    return writeData(CALIBRATION_FILE, source, 10);
-}
-
-bool fileExists(const char * path) {
-    struct stat st;
-    return stat(path, &st) == 0;
-}
-
-bool readData(const char * path, void * target, size_t size) {
-    FILE *fp = fopen(path, "r");
-    if(fp == NULL) {
-        ESP_LOGE(TAG, "Failed to open file %s for reading", path);
+    esp_err_t err = nvs_set_blob(handle, NVS_KEY_CALIB, source, 10);
+    if (err != ESP_OK) {
+        nvs_close(handle);
         return false;
     }
-    fread(target, 1, size, fp);
-    fclose(fp);
 
-    return true;
-}
+    err = nvs_commit(handle);
+    nvs_close(handle);
 
-bool writeData(const char * path, void * source, size_t size) {
-    FILE *fp = fopen(path, "w");
-    if(fp == NULL) {
-        ESP_LOGE(TAG, "Failed to open file %s for writing", path);
-        return false;
-    }
-    fwrite(source, 1, size, fp);
-    fclose(fp);
-
-    return true;
+    return (err == ESP_OK);
 }
