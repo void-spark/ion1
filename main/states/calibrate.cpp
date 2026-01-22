@@ -2,6 +2,8 @@
 #include "freertos/event_groups.h"
 #include "esp_log.h"
 #include "blink.h"
+#include "display.h"
+#include "cu2.h"
 #include "cmds.h"
 #include "bow.h"
 #include "states.h"
@@ -22,6 +24,11 @@ void handleCalibrateState(ion_state * state) {
     //   >> cal: almost directly after cal cmd (35)
     //   XXX handoffs later DP(CU3) pings motor, and starts to include it in handoffs
     //   Motor does get data 2a
+#if CONFIG_ION_CU2
+    displayUpdateCu2(false, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, false, 0, 0xccc, 0xa0a0a);
+    requestDisplayUpdate();
+	vTaskDelay(pdMS_TO_TICKS(1000));
+#endif
     if(state->step == 0) {
         exchange(cmdReq(MSG_MOTOR, MSG_BMS, CMD_CALIBRATE));
     } else if (state->step == 1) {

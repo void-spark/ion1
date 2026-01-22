@@ -7,6 +7,8 @@
 
 static const char *TAG = "bat";
 
+static uint32_t chargeFullMah = (CONFIG_ION_BAT_CHARGE * 3);
+
 // ADC Attenuation
 // 11DB = 3.55 voltage gain, reference voltage should be around 1100mv,
 // so max theoretical measurement would be 3905mv, actual/recommended(?) is a lot lower.
@@ -16,12 +18,18 @@ static bool cali_enable = false;
 static adc_oneshot_unit_handle_t adc1_handle = NULL;
 static adc_cali_handle_t adc1_cali_handle = NULL;
 
-// Use a fake value of 27.6v when we don't have ADC.
+// Batterij en stroomwaarden
+// Use a fake value of CONFIG_ION_ADC_FULL_MVv when we don't have ADC.
 static uint32_t batMv = 27600;
+static uint32_t batMa = 0;
+static uint32_t historyMa = 0;
 
 static uint32_t history;
 static uint8_t batPercentage;
 
+// Get lower/upper limit from configuration
+static uint32_t emptyMv = CONFIG_ION_ADC_EMPTY_MV;
+static uint32_t fullMv = CONFIG_ION_ADC_FULL_MV;
 static void adc_calibration_init(adc_unit_t unit, adc_atten_t atten) {
     esp_err_t ret = ESP_FAIL;
 
@@ -83,7 +91,11 @@ void adc_init() {
     config.atten = ADC_ATTEN;
     config.bitwidth = ADC_BITWIDTH_DEFAULT;
 
+    // Voltage channel
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, (adc_channel_t)CONFIG_ION_ADC_CHAN, &config));
+
+    // Current Channel
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, (adc_channel_t)CONFIG_ION_CURR_ADC_CHAN, &config));
 
     adc_calibration_init(ADC_UNIT_1, ADC_ATTEN);
 }
@@ -104,20 +116,30 @@ uint32_t measureBatMv() {
     return (adcVoltageMv * CONFIG_ION_DIVIDER_SCALE) / 1000;
 }
 
-static uint8_t batMvToPercentage(uint32_t batMv) {
+uint32_t measureCurrentMv() {
+    int adc_raw = 0;
+    ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, (adc_channel_t)CONFIG_ION_CURR_ADC_CHAN, &adc_raw));
+    int adcCurrentMv = 0;
+    if (cali_enable) {
+        ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_handle, adc_raw, &adcCurrentMv));
+    } else {
+        adcCurrentMv = (adc_raw * 3550) / (1 << SOC_ADC_RTC_MAX_BITWIDTH);
+    }
+	historyMa += adcCurrentMv;
+	uint32_t avg = historyMa >> 5;
+	historyMa -= avg;
 
-    // Get lower/upper limit from configuration
-    uint32_t emptyMv = CONFIG_ION_ADC_EMPTY_MV;
-    uint32_t fullMv = CONFIG_ION_ADC_FULL_MV;
+    return avg;
+}
+
+static uint8_t batMvToPercentage(uint32_t batMv) {
 
     // Calculate the percentage
     uint32_t percentage = (batMv < emptyMv) ? 0 : ((batMv - emptyMv) * 100) / (fullMv - emptyMv);
 
     // Limit to 0-100
     uint8_t batterypercentage = 0;
-    if (percentage < 0) {
-        batterypercentage = 0;
-    } else if (percentage > 100) {
+    if (percentage > 100) {
         batterypercentage = 100;
     } else {
         batterypercentage = (uint8_t)percentage;
@@ -138,7 +160,11 @@ void measureBat() {
 	uint32_t avg = history >> 7;
 	history -= avg;
 
-	batPercentage = batMvToPercentage(avg);
+    batPercentage = batMvToPercentage(avg);
+}
+
+void measureCurrent() {
+    batMa = measureCurrentMv();
 }
 
 uint32_t getBatMv() {
@@ -146,12 +172,16 @@ uint32_t getBatMv() {
 }
 
 uint8_t getBatPercentage() {
-    if(batPercentage == 0) {
+    if(batMv == 0) {
         // Use a fake value of 50% when we don't have ADC.
         return 50;
     }
 
     return batPercentage;
+}
+
+uint32_t getBatMa() {
+    return batMa;
 }
 
 void adc_teardown() {

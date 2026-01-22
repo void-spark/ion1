@@ -1,18 +1,25 @@
 #pragma once
+#include <stdint.h>
+#include <stdbool.h>
 
-#include <sys/unistd.h>
+struct batData {
+    uint32_t trip1;
+    uint32_t trip2;
+    uint32_t total;
 
-void init_littlefs();
+    uint8_t percentage;
+    uint32_t mv;
+    uint32_t mah;
+};
 
-// Is a calibration file stored?
-bool calibrationFileExists();
+// Init NVS + defaults
+void storageInit(void);
 
-// Reads calibration data to the given buffer, data is 10 bytes long
-bool readCalibrationData(uint8_t * target);
+// batData API
+struct batData *batDataGet(void);
+bool batDataLoad(void);
+bool batDataSave(void);
 
-// Writes calibration data from the given buffer, data is 10 bytes long
-bool writeCalibrationData(uint8_t * source);
-
-bool fileExists(const char * path);
-bool readData(const char * path, void * target, size_t size);
-bool writeData(const char * path, void * source, size_t size);
+// calibration API
+uint8_t *calibrationLoad(void);
+bool calibrationSave(uint8_t *source);
