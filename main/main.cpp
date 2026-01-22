@@ -31,6 +31,7 @@
 #include "motor.h"
 #include "relays.h"
 #include "trip.h"
+#include "charge.h"
 #include "states/states.h"
 #include "storage.h"
 
@@ -53,14 +54,14 @@ static const char *TAG = "app";
     #define CHARGE_PIN ((gpio_num_t)CONFIG_ION_CHARGE_PIN)
 #endif
 
-static const int BUTTON_MODE_SHORT_PRESS_BIT = BIT0;
-static const int BUTTON_MODE_LONG_PRESS_BIT = BIT1;
-static const int BUTTON_LIGHT_SHORT_PRESS_BIT = BIT2;
-static const int BUTTON_LIGHT_LONG_PRESS_BIT = BIT3;
-static const int IGNORE_HELD_BIT = BIT4;
-static const int WAKEUP_BIT = BIT5;
-static const int CALIBRATE_BIT = BIT6;
-static const int MEASURE_BAT_BIT = BIT7;
+static const int BUTTON_MODE_SHORT_PRESS_BIT   = BIT0;
+static const int BUTTON_MODE_LONG_PRESS_BIT    = BIT1;
+static const int BUTTON_LIGHT_SHORT_PRESS_BIT  = BIT2;
+static const int BUTTON_LIGHT_LONG_PRESS_BIT   = BIT3;
+static const int IGNORE_HELD_BIT               = BIT4;
+static const int WAKEUP_BIT                    = BIT5;
+static const int CALIBRATE_BIT                 = BIT6;
+static const int MEASURE_BAT_BIT               = BIT7;
 
 static EventGroupHandle_t controlEventGroup;
 
@@ -83,6 +84,8 @@ TimerHandle_t healthCheckTimer ;
 
 static void checkMyTaskHealth(TimerHandle_t xTimer) {
     if (!myTaskAlive) {
+	batDataSave();
+        batDataSave();
         esp_restart();
     }
     myTaskAlive = false;  // Reset voor volgende check
@@ -147,21 +150,8 @@ static messageHandlingResult handleMotorMessage(ion_state * state) {
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_SENDER;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 4 && message.command == CMD_GET_DATA && message.payload[1] == 0x38 && message.payload[3] == 0x3a) {
-        // GET DATA 9438283a 14:38(Calibration A) 28:3a(Calibration B)
-        uint8_t payload[] = {0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}; // Data (last 10 bytes) to be replaced
-
-        if(calibrationFileExists()) {
-            if(!readCalibrationData(payload + 1)) {
-                return CONTROL_TO_SENDER;
-            }
-        } else {
-            // Backup data
-            // Gold small test: 94 38 4b 13 28 3a 3e 98 ed f3
-            uint8_t data[] = {0x94, 0x38, 0x4b, 0x15, 0x28, 0x3a, 0x3e, 0x91, 0x79, 0x50}; // This needs to be good calibration data!
-            memcpy(payload + 1, data, 10);
-        }
-
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
+        uint8_t *payload = calibrationLoad();
+        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, 11));
         return CONTROL_TO_SENDER;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == CMD_PUT_DATA && message.payload[1] == 0xc0 && message.payload[5] == 0xc1) {
         // PUT DATA c0/c1
@@ -174,7 +164,7 @@ static messageHandlingResult handleMotorMessage(ion_state * state) {
         return CONTROL_TO_SENDER;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == CMD_PUT_DATA && message.payload[1] == 0x38 && message.payload[5] == 0x3a) {
         // PUT DATA 38/3a
-        if(!writeCalibrationData(message.payload)) {
+        if(!calibrationSave(message.payload)) {
             return CONTROL_TO_SENDER;
         }
 
@@ -242,11 +232,12 @@ static void my_task(void *pvParameter) {
     adc_init();
 #endif
 
-    init_littlefs();
+    storageInit();
 
     initUart();
 
     loadDistances();
+    loadCharge();
 
 #if CONFIG_ION_CU2
     initCu2(controlEventGroup, 
@@ -306,12 +297,12 @@ static void my_task(void *pvParameter) {
 #endif
 
         EventBits_t buttonBits = xEventGroupWaitBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT | BUTTON_MODE_LONG_PRESS_BIT | BUTTON_LIGHT_SHORT_PRESS_BIT | BUTTON_LIGHT_LONG_PRESS_BIT | WAKEUP_BIT | CALIBRATE_BIT, true, false, 0);
-        const bool modeShortPress = (buttonBits & BUTTON_MODE_SHORT_PRESS_BIT) != 0;
-        const bool modeLongPress = (buttonBits & BUTTON_MODE_LONG_PRESS_BIT) != 0;
+        const bool modeShortPress  = (buttonBits & BUTTON_MODE_SHORT_PRESS_BIT)  != 0;
+        const bool modeLongPress   = (buttonBits & BUTTON_MODE_LONG_PRESS_BIT)   != 0;
         const bool lightShortPress = (buttonBits & BUTTON_LIGHT_SHORT_PRESS_BIT) != 0;
-        const bool lightLongPress = (buttonBits & BUTTON_LIGHT_LONG_PRESS_BIT) != 0;
-        const bool wakeup = (buttonBits & WAKEUP_BIT) != 0;
-        const bool calibrate = (buttonBits & CALIBRATE_BIT) != 0;
+        const bool lightLongPress  = (buttonBits & BUTTON_LIGHT_LONG_PRESS_BIT)  != 0;
+        const bool wakeup          = (buttonBits & WAKEUP_BIT)                   != 0;
+        const bool calibrate       = (buttonBits & CALIBRATE_BIT)                != 0;
 
         if(lightShortPress) {
             toggleLight();
@@ -320,6 +311,7 @@ static void my_task(void *pvParameter) {
 
         if(modeLongPress) {
             resetTrip1(0);
+            resetCharge();
             requestDisplayUpdate();
         }
 
@@ -328,7 +320,15 @@ static void my_task(void *pvParameter) {
         EventBits_t bits = xEventGroupWaitBits(controlEventGroup, bitsToCheck, false, false, 0);
         if((bits & MEASURE_BAT_BIT) != 0) {
             xEventGroupClearBits(controlEventGroup, MEASURE_BAT_BIT);
+
+            // Batterij meten
             measureBat();
+
+#if CONFIG_ION_CURR_ADC
+            // Stroom meten tegelijk
+            measureCurrent();
+            chargeUpdate(getBatMv(), getBatMa());
+#endif
         } else
 #endif
         if(handleDisplayUpdate(&state)) {

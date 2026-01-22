@@ -37,7 +37,16 @@ jobs:
             custom: dvjcodec
           - target: esp32c3
             display: cu2
-            custom: supermini
+            custom: tesla.10Ah
+          - target: esp32c3
+            display: cu2
+            custom: tesla.15Ah
+          - target: esp32c3
+            display: cu2
+            custom: tesla.20Ah
+          - target: esp32c3
+            display: cu3
+            custom: teslatour.15Ah
     steps:
     - name: Checkout repo
       uses: actions/checkout@v3

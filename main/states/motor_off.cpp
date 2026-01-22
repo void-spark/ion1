@@ -3,14 +3,14 @@
 #include "freertos/event_groups.h"
 #include "esp_log.h"
 #include "blink.h"
-#include "trip.h"
+#include "storage.h"
 #include "states.h"
 
 void toMotorOffState(ion_state * state) {
 
     queueBlink(4, 100, 300);
 
-    saveDistances();
+    batDataSave();
 
     state->state = MOTOR_OFF;
     state->step = 0;
