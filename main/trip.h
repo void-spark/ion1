@@ -1,6 +1,6 @@
 #pragma once
 
-#include <sys/unistd.h>
+#include <stdint.h>
 
 // To reset on long press mode button
 void resetTrip1(uint32_t distance);
@@ -19,6 +19,3 @@ void distanceUpdate(uint32_t distance);
 
 // Load distances from flash
 void loadDistances();
-
-// Write distances to flash
-void saveDistances();

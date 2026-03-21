@@ -52,3 +52,14 @@ CONFIG_ION_ADC_EMPTY_MV=23000
 # Consider 27V (3,375V/cell for 8s  LiFePo4) full
 CONFIG_ION_ADC_FULL_MV=27000
 
+# --- Current measuring ---
+CONFIG_ION_CURR_ADC=y
+
+# ADC channel 2 is pin 1
+CONFIG_ION_CURR_ADC_CHAN=1
+
+# Full battery charge in mAh.
+CONFIG_ION_BAT_CHARGE=20000
+
+# keepalive
+CONFIG_ION_KEEPALIVE=y
