@@ -52,6 +52,5 @@ CONFIG_ION_ADC_EMPTY_MV=23000
 # Consider 27V (3,375V/cell for 8s  LiFePo4) full
 CONFIG_ION_ADC_FULL_MV=27000
 
-
 # keepalive
 CONFIG_ION_KEEPALIVE=y

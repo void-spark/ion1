@@ -250,7 +250,6 @@ static void my_task(void *pvParameter) {
     initMotor();
 
     measureBatTimer = xTimerCreate("measureBatTimer", (100 / portTICK_PERIOD_MS), pdTRUE, (void *)0, measureBatTimerCallback);
-
     xTimerStart(measureBatTimer, 0);
 	
 #if CONFIG_ION_KEEPALIVE
