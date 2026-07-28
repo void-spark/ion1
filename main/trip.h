@@ -2,6 +2,9 @@
 
 #include <sys/unistd.h>
 
+// To reset on long press mode button
+void resetTrip1(uint32_t distance);
+
 // Trip-1 in 10m increments
 uint32_t getTrip1();
 
