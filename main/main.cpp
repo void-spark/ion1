@@ -77,6 +77,20 @@ static TimerHandle_t measureBatTimer;
 
 static void measureBatTimerCallback(TimerHandle_t xTimer) { xEventGroupSetBits(controlEventGroup, MEASURE_BAT_BIT); }
 
+#if CONFIG_ION_KEEPALIVE
+volatile bool myTaskAlive = false;
+TimerHandle_t healthCheckTimer ;
+
+static void checkMyTaskHealth(TimerHandle_t xTimer) {
+    if (!myTaskAlive) {
+        saveDistances();
+        esp_restart();
+    }
+    myTaskAlive = false;  // Reset voor volgende check
+}
+#endif
+
+
 static messageHandlingResult handleMotorMessage(ion_state * state) {
     messageType message = {};
     readResult result;
@@ -251,6 +265,11 @@ static void my_task(void *pvParameter) {
     measureBatTimer = xTimerCreate("measureBatTimer", (100 / portTICK_PERIOD_MS), pdTRUE, (void *)0, measureBatTimerCallback);
 
     xTimerStart(measureBatTimer, 0);
+	
+#if CONFIG_ION_KEEPALIVE
+    healthCheckTimer = xTimerCreate("healthCheckTimer", 60000 / portTICK_PERIOD_MS, pdTRUE, NULL, checkMyTaskHealth);
+    xTimerStart(healthCheckTimer, 0);
+#endif
 
     ion_state state = {
         .state = IDLE,
@@ -265,6 +284,10 @@ static void my_task(void *pvParameter) {
     };
 
     while(true) {
+
+#if CONFIG_ION_KEEPALIVE
+        myTaskAlive = true;  // sign of life
+#endif
 
         // TODO:
         // More use of timeouts
