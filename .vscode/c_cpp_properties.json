@@ -5,8 +5,6 @@
             "includePath": [
                 "${workspaceFolder}/build/config",
                 "${workspaceFolder}/components/esp32-button/include",
-                "${workspaceFolder}/components/mqtt_helper/include",
-                "${workspaceFolder}/components/wifi_helper/include",
                 "${workspaceFolder}/main",
                 "${workspaceFolder}/sdk/idf/components/app_trace/include",
                 "${workspaceFolder}/sdk/idf/components/app_update/include",
