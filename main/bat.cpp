@@ -19,11 +19,12 @@ static adc_cali_handle_t adc1_cali_handle = NULL;
 // Use a fake value of 27.6v when we don't have ADC.
 static uint32_t batMv = 27600;
 
-// We try to measure every 100ms, so 100 points gives us 10 seconds history.
-static uint8_t history[100];
-static size_t historyIndex = 0;
-static size_t historySize = 0;
+static uint32_t history;
+static uint8_t batPercentage;
 
+// Get lower/upper limit from configuration
+static uint32_t emptyMv = CONFIG_ION_ADC_EMPTY_MV;
+static uint32_t fullMv = CONFIG_ION_ADC_FULL_MV;
 static void adc_calibration_init(adc_unit_t unit, adc_atten_t atten) {
     esp_err_t ret = ESP_FAIL;
 
@@ -85,6 +86,7 @@ void adc_init() {
     config.atten = ADC_ATTEN;
     config.bitwidth = ADC_BITWIDTH_DEFAULT;
 
+    // Voltage channel
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, (adc_channel_t)CONFIG_ION_ADC_CHAN, &config));
 
     adc_calibration_init(ADC_UNIT_1, ADC_ATTEN);
@@ -108,18 +110,12 @@ uint32_t measureBatMv() {
 
 static uint8_t batMvToPercentage(uint32_t batMv) {
 
-    // Get lower/upper limit from configuration
-    uint32_t emptyMv = CONFIG_ION_ADC_EMPTY_MV;
-    uint32_t fullMv = CONFIG_ION_ADC_FULL_MV;
-
     // Calculate the percentage
     uint32_t percentage = (batMv < emptyMv) ? 0 : ((batMv - emptyMv) * 100) / (fullMv - emptyMv);
 
     // Limit to 0-100
     uint8_t batterypercentage = 0;
-    if (percentage < 0) {
-        batterypercentage = 0;
-    } else if (percentage > 100) {
+    if (percentage > 100) {
         batterypercentage = 100;
     } else {
         batterypercentage = (uint8_t)percentage;
@@ -130,11 +126,17 @@ static uint8_t batMvToPercentage(uint32_t batMv) {
 
 void measureBat() {
     batMv = measureBatMv();
-    history[historyIndex] = batMvToPercentage(batMv);
-    historyIndex = (historyIndex + 1) % sizeof(history);
-    if(historySize < sizeof(history)) {
-        historySize++;
-    }
+
+	// This is provided by 'mooiweertje' and is pretty much similar to Simple Exponential Smoothing (https://en.wikipedia.org/wiki/Exponential_smoothing).
+	// By using an alpha of 1/128, and storing the smoothed value scaled by 128 in history, this can be written very efficiently though,
+	// and the scaled value allows us to work with integers instead of floating point.
+	// It should take about 5 x 128 (640) calls to settle on a value (at 99.3%), and we try to measure every 100ms,
+	// which puts us a bit over 60 seconds. That's quite slow, but for a battery indicator should be ok.
+	history += batMv;
+	uint32_t avg = history >> 7;
+	history -= avg;
+
+    batPercentage = batMvToPercentage(avg);
 }
 
 uint32_t getBatMv() {
@@ -142,17 +144,12 @@ uint32_t getBatMv() {
 }
 
 uint8_t getBatPercentage() {
-    if(historySize == 0) {
+    if(batMv == 0) {
         // Use a fake value of 50% when we don't have ADC.
         return 50;
     }
 
-    uint32_t historyTotal = 0;
-    for(int index = 0; index < historySize; index++) {
-        historyTotal += history[index];
-    }
-
-    return historyTotal / historySize;
+    return batPercentage;
 }
 
 void adc_teardown() {
