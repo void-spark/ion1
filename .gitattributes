@@ -5,6 +5,7 @@
 *.sh    		text eol=lf
 *.json          text eol=lf
 sdkconfig   	text eol=lf
+sdkconfig.*   	text eol=lf
 .gitattributes  text eol=lf
 .gitignore		text eol=lf
 .gitmodules		text eol=lf
