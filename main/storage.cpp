@@ -1,83 +1,37 @@
-#include <sys/stat.h>
-#include "esp_log.h"
-#include "esp_spiffs.h"
 #include "storage.h"
+#include "nvs_flash.h"
+#include "esp_log.h"
 
 static const char *TAG = "storage";
 
-#define CALIBRATION_FILE "/spiffs/calibration.bin"
+#define NVS_NAMESPACE "storage"
 
-void init_spiffs() {
-    ESP_LOGI(TAG, "Initializing SPIFFS");
-
-    esp_vfs_spiffs_conf_t spiffs_conf = {};
-    spiffs_conf.base_path = "/spiffs";
-    spiffs_conf.partition_label = NULL;
-    spiffs_conf.max_files = 5;
-    spiffs_conf.format_if_mount_failed = true;
-
-    ESP_ERROR_CHECK(esp_vfs_spiffs_register(&spiffs_conf));
-
-    size_t total = 0, used = 0;
-    esp_err_t ret = esp_spiffs_info(spiffs_conf.partition_label, &total, &used);
-    if(ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s)", esp_err_to_name(ret));
-    } else {
-        ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
-    }
-    
-    struct stat st;
-    if(stat(CALIBRATION_FILE, &st) == 0) {
-        FILE *fp = fopen(CALIBRATION_FILE, "r");
-        if(fp == NULL) {
-            ESP_LOGE(TAG, "Failed to open calibration file for reading");
-        } else {
-            uint8_t data[10];
-            size_t read = fread(data, 1, sizeof(data), fp);
-            fclose(fp);
-            ESP_LOGI(TAG, "Calibration file found. Size: %lu, content:", st.st_size);        
-            ESP_LOG_BUFFER_HEX(TAG, data, read);
-        }
-    }
-}
-
-bool calibrationFileExists() {
-    return fileExists(CALIBRATION_FILE);
-}
-
-bool readCalibrationData(uint8_t * target) {
-    return readData(CALIBRATION_FILE, target, 10);
-}
-
-bool writeCalibrationData(uint8_t * source){
-    return writeData(CALIBRATION_FILE, source, 10);
-}
-
-bool fileExists(const char * path) {
-    struct stat st;
-    return stat(path, &st) == 0;
-}
-
-bool readData(const char * path, void * target, size_t size) {
-    FILE *fp = fopen(path, "r");
-    if(fp == NULL) {
-        ESP_LOGE(TAG, "Failed to open file %s for reading", path);
+bool dataLoad(const char *key, void *out_value, size_t length) {
+    nvs_handle_t handle;
+    if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) {
         return false;
     }
-    fread(target, 1, size, fp);
-    fclose(fp);
 
-    return true;
+    esp_err_t err = nvs_get_blob(handle, key, out_value, &length);
+    nvs_close(handle);
+
+    return (err == ESP_OK);
 }
 
-bool writeData(const char * path, void * source, size_t size) {
-    FILE *fp = fopen(path, "w");
-    if(fp == NULL) {
-        ESP_LOGE(TAG, "Failed to open file %s for writing", path);
+bool dataSave(const char *key, const void *value, size_t length) {
+    nvs_handle_t handle;
+    if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) {
         return false;
     }
-    fwrite(source, 1, size, fp);
-    fclose(fp);
 
-    return true;
+    esp_err_t err = nvs_set_blob(handle, key, value, length);
+    if (err != ESP_OK) {
+        nvs_close(handle);
+        return false;
+    }
+
+    err = nvs_commit(handle);
+    nvs_close(handle);
+
+    return (err == ESP_OK);
 }

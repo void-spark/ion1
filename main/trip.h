@@ -1,6 +1,14 @@
 #pragma once
 
-#include <sys/unistd.h>
+#include <stdint.h>
+
+#define TRIP_NVS_KEY_TRIPDATA "tripdata"
+
+struct tripData {
+    uint32_t trip1;
+    uint32_t trip2;
+    uint32_t total;
+};
 
 // To reset on long press mode button
 void resetTrip1(uint32_t distance);
