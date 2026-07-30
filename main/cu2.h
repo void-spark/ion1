@@ -1,18 +1,11 @@
 #pragma once
 
 #include <sys/unistd.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
 
 enum assist_level { ASS_OFF = 0, ASS_ECO, ASS_NORMAL, ASS_POWER };
 enum blink_speed { BLNK_OFF = 0, BLNK_FAST, BLNK_SLOW, BLNK_SOLID };
 
-void initCu2(EventGroupHandle_t eventGroupHandle,
-             const int buttonModeShortPressBit,
-             const int buttonModeLongPressBit,
-             const int buttonLightShortPressBit,
-             const int buttonLightLongPressBit,
-             const int ignoreHeldBit);
+void initCu2();
 
 void buttonCheck();
 

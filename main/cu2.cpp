@@ -4,6 +4,7 @@
 #include "freertos/event_groups.h"
 #include "bow.h"
 #include "cmds.h"
+#include "ctrl_event_group.h"
 
 #include "cu2.h"
 
@@ -15,29 +16,13 @@ static const int CHECK_BUTTON_BIT = BIT0;
 static TimerHandle_t buttonCheckTimer;
 
 static EventGroupHandle_t displayEventGroupHandle;
-static EventGroupHandle_t _eventGroupHandle;
 
-static int _buttonModeShortPressBit;
-static int _buttonModeLongPressBit;
-static int _buttonLightShortPressBit;
-static int _buttonLightLongPressBit;
-static int _ignoreHeldBit;
+static void buttonCheckTimerCallback(TimerHandle_t xTimer) {
+    xEventGroupSetBits(displayEventGroupHandle, CHECK_BUTTON_BIT);
+}
 
-static void buttonCheckTimerCallback(TimerHandle_t xTimer) { xEventGroupSetBits(displayEventGroupHandle, CHECK_BUTTON_BIT); }
-
-void initCu2(EventGroupHandle_t eventGroupHandle,
-             const int buttonModeShortPressBit,
-             const int buttonModeLongPressBit,
-             const int buttonLightShortPressBit,
-             const int buttonLightLongPressBit,
-             const int ignoreHeldBit) {
+void initCu2() {
     displayEventGroupHandle = xEventGroupCreate();
-    _eventGroupHandle = eventGroupHandle;
-    _buttonModeShortPressBit = buttonModeShortPressBit;
-    _buttonModeLongPressBit = buttonModeLongPressBit;
-    _buttonLightShortPressBit = buttonLightShortPressBit;
-    _buttonLightLongPressBit = buttonLightLongPressBit;
-    _ignoreHeldBit = ignoreHeldBit;
 
     buttonCheckTimer = xTimerCreate("buttonCheckTimer", (100 / portTICK_PERIOD_MS), pdTRUE, (void *)0, buttonCheckTimerCallback);
 }
@@ -50,8 +35,8 @@ void buttonCheck() {
 
     static bool ignoreFirst = false;
 
-    EventBits_t bits = xEventGroupWaitBits(_eventGroupHandle, _ignoreHeldBit, true, false, 0);
-    if((bits & _ignoreHeldBit) != 0) {
+    EventBits_t bits = waitControlBits(IGNORE_HELD_BIT, true, false, 0);
+    if((bits & IGNORE_HELD_BIT) != 0) {
         ignoreFirst = true;
     }
 
@@ -75,18 +60,18 @@ void buttonCheck() {
     }
 
     if(heldMode == LONG_PRESS_UPDATES) {
-        xEventGroupSetBits(_eventGroupHandle, _buttonModeLongPressBit);
+        setControlBits(BUTTON_MODE_LONG_PRESS_BIT);
     }
 
     if(heldLight == LONG_PRESS_UPDATES) {
-        xEventGroupSetBits(_eventGroupHandle, _buttonLightLongPressBit);
+        setControlBits(BUTTON_LIGHT_LONG_PRESS_BIT);
     }
 
     if(heldMode > 0 && !pressMode) {
         if(ignoreFirst) {
             ignoreFirst = false;
         } else if(heldMode < LONG_PRESS_UPDATES) {
-            xEventGroupSetBits(_eventGroupHandle, _buttonModeShortPressBit);
+            setControlBits(BUTTON_MODE_SHORT_PRESS_BIT);
         }
         heldMode = 0;
     }
@@ -95,7 +80,7 @@ void buttonCheck() {
         if(ignoreFirst) {
             ignoreFirst = false;
         } else if(heldLight < LONG_PRESS_UPDATES) {
-            xEventGroupSetBits(_eventGroupHandle, _buttonLightShortPressBit);
+            setControlBits(BUTTON_LIGHT_SHORT_PRESS_BIT);
         }
         heldLight = 0;
     }
@@ -109,7 +94,7 @@ void startButtonCheck() { xTimerStart(buttonCheckTimer, 0); }
 void stopButtonCheck() { xTimerStop(buttonCheckTimer, 0); }
 
 void ignorePress() {
-    xEventGroupSetBits(_eventGroupHandle, _ignoreHeldBit); 
+    setControlBits(IGNORE_HELD_BIT);
 }
 
 uint32_t digits(uint32_t value, size_t digits, size_t atleast) {
