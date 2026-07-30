@@ -142,14 +142,12 @@ static messageHandlingResult handleMotorMessage(ion_state * state) {
     } else if(handleCu3Message(message)) {
         return CONTROL_TO_SENDER;
 #endif
+    } else if(handleCalibrationMessage(message)) {
+        return CONTROL_TO_SENDER;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x2a) {
         // GET DATA 002a 00:2a(Unknown)
         uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x01};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 4 && message.command == CMD_GET_DATA && message.payload[1] == 0x38 && message.payload[3] == 0x3a) {
-        uint8_t *payload = calibrationLoad();
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, CAL_PAYLOAD_SIZE));
         return CONTROL_TO_SENDER;
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == CMD_PUT_DATA && message.payload[1] == 0xc0 && message.payload[5] == 0xc1) {
         // PUT DATA c0/c1
@@ -159,15 +157,6 @@ static messageHandlingResult handleMotorMessage(ion_state * state) {
         uint8_t payload[] = {0x00};
         writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         requestDisplayUpdate();
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == CMD_PUT_DATA && message.payload[1] == 0x38 && message.payload[5] == 0x3a) {
-        // PUT DATA 38/3a
-        if(!calibrationSave(message.payload)) {
-            return CONTROL_TO_SENDER;
-        }
-
-        uint8_t payload[] = {0x00};
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
         return CONTROL_TO_SENDER;
     }
 
