@@ -85,7 +85,6 @@ TimerHandle_t healthCheckTimer ;
 static void checkMyTaskHealth(TimerHandle_t xTimer) {
     if (!myTaskAlive) {
 	batDataSave();
-        batDataSave();
         esp_restart();
     }
     myTaskAlive = false;  // Reset voor volgende check
