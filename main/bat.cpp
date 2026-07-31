@@ -7,6 +7,8 @@
 
 static const char *TAG = "bat";
 
+static uint32_t chargeFullMah = (CONFIG_ION_BAT_CHARGE * 3);
+
 // ADC Attenuation
 // Usable measuring range according to the manual for 12db is 150 ∼ 2450 mV
 #define ADC_ATTEN ADC_ATTEN_DB_12
@@ -15,7 +17,11 @@ static bool cali_enable = false;
 static adc_oneshot_unit_handle_t adc1_handle = NULL;
 static adc_cali_handle_t adc1_cali_handle = NULL;
 
-static uint32_t batMv;
+// Batterij en stroomwaarden
+// Use a fake value of CONFIG_ION_ADC_FULL_MVv when we don't have ADC.
+static uint32_t batMv = 27600;
+static uint32_t batMa = 0;
+static uint32_t historyMa = 0;
 
 static bool haveMeasurement;
 static uint32_t history;
@@ -88,6 +94,9 @@ void adc_init() {
     // Voltage channel
     ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, (adc_channel_t)CONFIG_ION_ADC_CHAN, &config));
 
+    // Current Channel
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc1_handle, (adc_channel_t)CONFIG_ION_CURR_ADC_CHAN, &config));
+
     adc_calibration_init(ADC_UNIT_1, ADC_ATTEN);
 }
 
@@ -105,6 +114,22 @@ uint32_t measureBatMv() {
 
     // Calculate actual voltage in mv
     return (adcVoltageMv * CONFIG_ION_DIVIDER_SCALE) / 1000;
+}
+
+uint32_t measureCurrentMv() {
+    int adc_raw = 0;
+    ESP_ERROR_CHECK(adc_oneshot_read(adc1_handle, (adc_channel_t)CONFIG_ION_CURR_ADC_CHAN, &adc_raw));
+    int adcCurrentMv = 0;
+    if (cali_enable) {
+        ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_handle, adc_raw, &adcCurrentMv));
+    } else {
+        adcCurrentMv = (adc_raw * 3550) / (1 << SOC_ADC_RTC_MAX_BITWIDTH);
+    }
+	historyMa += adcCurrentMv;
+	uint32_t avg = historyMa >> 5;
+	historyMa -= avg;
+
+    return avg;
 }
 
 static uint8_t batMvToPercentage(uint32_t batMv) {
@@ -138,6 +163,10 @@ void measureBat() {
     haveMeasurement = true;
 }
 
+void measureCurrent() {
+    batMa = measureCurrentMv();
+}
+
 uint32_t getBatMv() {
     if(!haveMeasurement) {
         // Use a fake value of 27.6v when we don't have ADC.
@@ -154,6 +183,10 @@ uint8_t getBatPercentage() {
     }
 
     return batPercentage;
+}
+
+uint32_t getBatMa() {
+    return batMa;
 }
 
 void adc_teardown() {

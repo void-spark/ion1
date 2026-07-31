@@ -87,6 +87,18 @@ menu "Sparta Ion Config"
         int "The actual battery voltage in mv for full (=100%). For example 42000mv for a 10s battery"
         default 42000
 
+    config ION_CURR_ADC
+        bool "Enable ADC for current measurement"
+        default n
+
+    config ION_CURR_ADC_CHAN
+        int "ADC channel to use for current measurement"
+        default 6
+
+    config ION_BAT_CHARGE
+        int "Full battery charge in mAh."
+        default 10000
+
     config ION_KEEPALIVE
         bool "Enable keepalive heartbeat. Will reset the ESP32 when main loop is stuck for more than a minute."
         default n

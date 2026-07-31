@@ -32,9 +32,11 @@
 #include "relays.h"
 #include "trip.h"
 #include "calibration.h"
+#include "charge.h"
 #include "states/states.h"
 #include "ctrl_event_group.h"
 #include "msg_handling.h"
+#include "storage.h"
 
 static const char *TAG = "app";
 
@@ -67,7 +69,7 @@ TimerHandle_t healthCheckTimer ;
 
 static void checkMyTaskHealth(TimerHandle_t xTimer) {
     if (!myTaskAlive) {
-        saveDistances();
+	batDataSave();
         esp_restart();
     }
     myTaskAlive = false;  // Reset voor volgende check
@@ -134,9 +136,12 @@ static void my_task(void *pvParameter) {
     adc_init();
 #endif
 
+    storageInit();
+
     initUart();
 
     loadDistances();
+    loadCharge();
 
 #if CONFIG_ION_CU2
     initCu2();
@@ -204,6 +209,7 @@ static void my_task(void *pvParameter) {
 
         if(modeLongPress) {
             resetTrip1(0);
+            resetCharge();
             requestDisplayUpdate();
         }
 

@@ -3,6 +3,7 @@
 #include "freertos/timers.h"
 #include "states/states.h"
 #include "trip.h"
+#include "charge.h"
 #include "relays.h"
 #include "bat.h"
 #include "cu2.h"
@@ -41,7 +42,12 @@ void stopDisplayUpdates() {
 static void displayUpdate(ion_state * state) {
 #if CONFIG_ION_CU2
     uint16_t numTop = digits(state->speed, 3, 2);
+    // uint16_t numTop = digits(getChargePercentage(), 3, 2);
+	//uint16_t numTop = digits(getBatMv(), 3, 2);
     uint32_t numBottom = digits(getTrip1() / 100, 5, 1);
+    // uint32_t numBottom = digits(getBatMa(), 5, 1);
+    // uint32_t numBottom = digits(getMah() / 1000, 5, 1);
+    uint8_t batPercentage = getChargePercentage();
     displayUpdateCu2(false, // setDefault
                      (assist_level)state->level, // assistLevel
                      BLNK_SOLID, // assistBlink
@@ -55,7 +61,7 @@ static void displayUpdate(ion_state * state) {
                      BLNK_SOLID, // top
                      BLNK_SOLID, // bottom
                      false, // miles
-                     getBatPercentage(), // batPercentage
+                     batPercentage, // batPercentage
                      numTop, // topVal
                      numBottom); // bottomVal
 #elif CONFIG_ION_CU3

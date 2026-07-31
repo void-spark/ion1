@@ -1,47 +1,49 @@
 #include "storage.h"
 #include "trip.h"
 
-static struct tripData data;
+static struct batData *bat;
 
 static uint32_t lastDistance = 0;
 
 void resetTrip1(uint32_t distance) {
-    data.trip1 = distance;
+    bat->trip1 = distance;
 }
 
 uint32_t getTrip1() {
-    return data.trip1;
+    return bat->trip1;
 }
 
 uint32_t getTrip2() {
-    return data.trip2;
+    return bat->trip2;
 }
 
 uint32_t getTotal() {
-    return data.total;
+    return bat->total;
 }
 
 void distanceUpdate(uint32_t distance) {
-    if(distance < lastDistance) {
-        // We expect this only happens when the motor reset (powered off and on).
-        // Which means the motor started at 0 again.
-        // We could reset when we know we power off the motor instead, but what if we don't have a relay (or it's broken)?
+
+    if (distance < lastDistance) {
+        // Motor is opnieuw opgestart ? teller terug naar 0
         lastDistance = 0;
     }
 
     uint32_t delta = distance - lastDistance;
 
-    data.trip1 += delta;
-    data.trip2 += delta;
-    data.total += delta;
+    bat->trip1 += delta;
+    bat->trip2 += delta;
+    bat->total += delta;
 
     lastDistance = distance;
 }
 
 void loadDistances() {
-    dataLoad(TRIP_NVS_KEY_TRIPDATA, &data, sizeof(data));
-}
+    bat = batDataGet();
 
-void saveDistances() {
-    dataSave(TRIP_NVS_KEY_TRIPDATA, &data, sizeof(data));
+    if (!batDataLoad()) {
+        // Defaults als er nog geen data in NVS staat
+        bat->trip1 = 0;
+        bat->trip2 = 0;
+        bat->total = 0;
+    }
 }

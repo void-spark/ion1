@@ -1,6 +1,26 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
-bool dataLoad(const char *key, void *out_value, size_t length);
-bool dataSave(const char *key, const void *value, size_t length);
+struct batData {
+    uint32_t trip1;
+    uint32_t trip2;
+    uint32_t total;
+
+    uint8_t percentage;
+    uint32_t mv;
+    uint32_t mah;
+};
+
+// Init NVS + defaults
+void storageInit(void);
+
+// batData API
+struct batData *batDataGet(void);
+bool batDataLoad(void);
+bool batDataSave(void);
+
+// calibration API
+bool calibrationLoad(void *out_value, size_t length);
+bool calibrationSave(const void *value, size_t length);

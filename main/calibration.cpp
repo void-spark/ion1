@@ -4,7 +4,6 @@
 #include <string.h>
 
 #define CAL_SIZE 10
-#define CAL_NVS_KEY_CALIB "calibration"
 
 bool handleCalibrationMessage(const messageType& message) {
     if(message.type == MSG_CMD_REQ && message.payloadSize == 4 && message.command == CMD_GET_DATA && message.payload[1] == 0x38 && message.payload[3] == 0x3a) {
@@ -29,7 +28,7 @@ bool handleCalibrationMessage(const messageType& message) {
         payload[0] = 0x00;
 
         // Try reading calibration from NVS.
-        if(!dataLoad(CAL_NVS_KEY_CALIB, payload + 1, CAL_SIZE)) {
+        if(!calibrationLoad(payload + 1, CAL_SIZE)) {
             // Failed to load calibration, use fallback instead.
             memcpy(payload + 1, fallback, CAL_SIZE);
         }
@@ -39,7 +38,7 @@ bool handleCalibrationMessage(const messageType& message) {
     } else if(message.type == MSG_CMD_REQ && message.payloadSize == CAL_SIZE && message.command == CMD_PUT_DATA && message.payload[1] == 0x38 && message.payload[5] == 0x3a) {
         // PUT DATA 38 and 3a
 
-        if(!dataSave(CAL_NVS_KEY_CALIB, message.payload, CAL_SIZE)) {
+        if(!calibrationSave(message.payload, CAL_SIZE)) {
             return true;
         }
 
