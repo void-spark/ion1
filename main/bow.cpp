@@ -159,6 +159,15 @@ readResult handleFraming(uint8_t value, parserState *state) {
     }
 }
 
+/**
+ * Read a single message from the bus.
+ * Will return:
+ * - MSG_TIMEOUT   if timeout > 0 and the timeout expires between starting to read part of the message
+ *                 and receiving any bytes. So the bus has to be silent for the given time
+ * - MSG_WAKEUP    if a single 0x00 byte is received, which is used as a 'wakeup' signal
+ * - MSG_CRC_ERROR if a message with an invalid crc value was read
+ * - MSG_OK        if a full message was read with correct CRC
+ */
 readResult readMessage(messageType *message, TickType_t timeout) {
     uint8_t data[RX_BUF_SIZE];
     parserState state = {};

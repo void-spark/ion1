@@ -75,28 +75,61 @@ static void checkMyTaskHealth(TimerHandle_t xTimer) {
 #endif
 
 static void doHandoff(ion_state * state) {
-
 #if CONFIG_ION_CU3
-    writeMessage(handoffMsg(MSG_DISPLAY));
+    uint8_t handoffTarget = MSG_DISPLAY;
 #else
-    writeMessage(handoffMsg(MSG_MOTOR));
+    uint8_t handoffTarget = MSG_MOTOR;
 #endif
+    writeMessage(handoffMsg(handoffTarget));
 
     while(true) {
         // Keep handling responses, and subsequent incoming messages, until someone hands off back to us.
-        messageHandlingResult result = handleMessage(state);
-        if(result == CONTROL_TO_US) {
-            return;
-        } else if(result == HANDOFF_TIMEOUT) {
-            // Timeout, assume motor turned off. CU3 will keep chatting, so no timeout then.
-            // Could also have been a CRC error at some point, in that case we might have to start things back up.
-#if CONFIG_ION_CU2
-            stopButtonCheck();
-#endif
-            if(state->state == MOTOR_OFF) {
-                state->doHandoffs = false;
-                toIdleState(state);
+        bool sawValidMessage = false;
+        messageType message = {};
+        readResult readResult;
+        do {
+            // Replies to handoff should be a lot quicker then 250ms
+            readResult = readMessage(&message, 250 / portTICK_PERIOD_MS);
+            if(readResult == MSG_OK &&
+                (message.source == handoffTarget ||
+                (message.type == MSG_HANDOFF && message.target != handoffTarget))) {
+                // We saw a good message from our target, or another handoff message (to another target). So probably it accepted the handoff.
+                sawValidMessage = true;
             }
+            if(readResult == MSG_TIMEOUT) {
+                // The bus was quiet too long after our handoff message, or any subsequent messages.
+                // The target is likely not listening or turned off.
+                // E.g. CU3 removed, or XHP motor turned off (Toprun motor seems to stay chatty even when 'off').
+                // Or some messages got mangled/lost somehow (probably seen as CRC error) and now everyone is waiting.
+
+                if(handoffTarget == MSG_DISPLAY && !sawValidMessage) {
+                    // Let's assume the CU3 display is removed, handoff to motor instead.
+                    // TODO: We should remember this, and ping the display now and then to see if it's back.
+                    handoffTarget = MSG_MOTOR;
+                    writeMessage(handoffMsg(handoffTarget));
+                    continue; // I'd prefer to jump to the outer loop, but this is good enough..
+                }
+
+#if CONFIG_ION_CU2
+                stopButtonCheck();
+#endif
+                if(state->state == MOTOR_OFF) {
+                    state->doHandoffs = false;
+                    toIdleState(state);
+                }
+                return;
+            }
+
+            // We will ignore:
+            // - Messages with CRC error
+            // - Wakeup messages (we are already awake)
+            // - Message not addressed to us
+        } while(readResult != MSG_OK || message.target != MSG_BMS);
+
+        // A message was sent to us, deal with it.
+        messageHandlingResult handleResult = handleMessage(message, state);
+        if(handleResult == CONTROL_TO_US) {
+            // There was a handoff to us, so we're back in control. Exit the loop.
             return;
         }
     }

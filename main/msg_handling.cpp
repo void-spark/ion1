@@ -14,19 +14,7 @@
 
 static const char *TAG = "msg_handling";
 
-messageHandlingResult handleMessage(ion_state * state) {
-    messageType message = {};
-    readResult result;
-    do {
-        // Replies to handoff should be a lot quicker then 250ms
-        result = readMessage(&message, 250 / portTICK_PERIOD_MS);
-        if(result == MSG_TIMEOUT) {
-            // Most likely the motor turned off, after we told it to (XHP, Toprun doesn't seem to stop)
-            // Or if we're handing of to CU3, it might not be there.
-            return HANDOFF_TIMEOUT;
-        }
-    } while(result != MSG_OK || message.target != MSG_BMS);
-
+messageHandlingResult handleMessage(const messageType& message, ion_state * state) {
     if(message.type == MSG_HANDOFF) {
         // Handoff back to us
         return CONTROL_TO_US;
