@@ -15,50 +15,14 @@ jobs:
       matrix:
         target: [esp32, esp32c3]
         display: [cu2, cu3]
-        custom: [std]
-        include:
-          - target: esp32
-            display: cu3
-            custom: mike
-          - target: esp32
-            display: cu3
-            custom: wroom2xrelay
-          - target: esp32
-            display: cu2
-            custom: gpu7990
-          - target: esp32
-            display: cu3
-            custom: gpu7990
-          - target: esp32
-            display: cu2
-            custom: dvjcodec
-          - target: esp32
-            display: cu3
-            custom: dvjcodec
-          - target: esp32c3
-            display: cu2
-            custom: tesla.10Ah
-          - target: esp32c3
-            display: cu2
-            custom: tesla.15Ah
-          - target: esp32c3
-            display: cu2
-            custom: tesla.20Ah
-          - target: esp32c3
-            display: cu3
-            custom: teslatour.15Ah
+        battery: [10Ah, 15Ah, 20Ah]
     steps:
     - name: Checkout repo
       uses: actions/checkout@v3
-      with:
-        submodules: 'recursive'
-
+        
     # We should be able to use SDKCONFIG_DEFAULTS, but it seems to be broken, this also works.
     # The echo makes sure there is a newline inbetween the original, and added part
-    - run: echo >> sdkconfig.defaults.${{ matrix.target }}; cat sdkconfig.${{ matrix.display }} >> sdkconfig.defaults.${{ matrix.target }}
-
-    - if: ${{ matrix.custom != 'std' }}
-      run: echo >> sdkconfig.defaults.${{ matrix.target }}; cat sdkconfig.${{ matrix.custom }} >> sdkconfig.defaults.${{ matrix.target }}
+    - run: echo >> sdkconfig.defaults.${{ matrix.target }}; cat sdkconfig.${{ matrix.display }} >> sdkconfig.defaults.${{ matrix.target }}; cat sdkconfig.${{ matrix.battery }} >> sdkconfig.defaults.${{ matrix.target }}
 
     # Show used config
     - run: cat sdkconfig.defaults.${{ matrix.target }}
@@ -68,11 +32,11 @@ jobs:
       with:
         esp_idf_version: v5.5.1
         target: ${{ matrix.target }}
-        path: ''
+        path: .
 
     - uses: actions/upload-artifact@v4
       with:
-        name: firmware-${{ matrix.target }}-${{ matrix.display }}-${{ matrix.custom }}
+        name: firmware-${{ matrix.target }}-${{ matrix.display }}-${{ matrix.battery }}
         path: |
           ${{ github.workspace }}/build/bootloader/bootloader.bin
           ${{ github.workspace }}/build/partition_table/partition-table.bin

@@ -31,8 +31,11 @@
 #include "motor.h"
 #include "relays.h"
 #include "trip.h"
+#include "calibration.h"
 #include "charge.h"
 #include "states/states.h"
+#include "ctrl_event_group.h"
+#include "msg_handling.h"
 #include "storage.h"
 
 static const char *TAG = "app";
@@ -54,29 +57,11 @@ static const char *TAG = "app";
     #define CHARGE_PIN ((gpio_num_t)CONFIG_ION_CHARGE_PIN)
 #endif
 
-static const int BUTTON_MODE_SHORT_PRESS_BIT   = BIT0;
-static const int BUTTON_MODE_LONG_PRESS_BIT    = BIT1;
-static const int BUTTON_LIGHT_SHORT_PRESS_BIT  = BIT2;
-static const int BUTTON_LIGHT_LONG_PRESS_BIT   = BIT3;
-static const int IGNORE_HELD_BIT               = BIT4;
-static const int WAKEUP_BIT                    = BIT5;
-static const int CALIBRATE_BIT                 = BIT6;
-static const int MEASURE_BAT_BIT               = BIT7;
-
-static EventGroupHandle_t controlEventGroup;
-
-enum messageHandlingResult {
-    // We got a handoff back, so we get to send the next message
-    CONTROL_TO_US,
-    // We had to reply to a message, so sender is next to send a message.
-    CONTROL_TO_SENDER,
-    // We did not get a timely reply to a handoff message.
-    HANDOFF_TIMEOUT
-};
-
 static TimerHandle_t measureBatTimer;
 
-static void measureBatTimerCallback(TimerHandle_t xTimer) { xEventGroupSetBits(controlEventGroup, MEASURE_BAT_BIT); }
+static void measureBatTimerCallback(TimerHandle_t xTimer) {
+    setControlBits(MEASURE_BAT_BIT);
+}
 
 #if CONFIG_ION_KEEPALIVE
 volatile bool myTaskAlive = false;
@@ -91,110 +76,30 @@ static void checkMyTaskHealth(TimerHandle_t xTimer) {
 }
 #endif
 
-
-static messageHandlingResult handleMotorMessage(ion_state * state) {
-    messageType message = {};
-    readResult result;
-    do {
-        // Replies to handoff should be a lot quicker then 250ms
-        result = readMessage(&message, 250 / portTICK_PERIOD_MS);
-        if(result == MSG_TIMEOUT) {
-            // Most likely the motor turned off, after we told it to (XHP, Toprun doesn't seem to stop)
-            return HANDOFF_TIMEOUT;
-        }
-    } while(result != MSG_OK || message.target != MSG_BMS);
-
-    if(message.type == MSG_HANDOFF) {
-        // Handoff back to us
-        return CONTROL_TO_US;
-    } else if(message.type == MSG_PING_REQ) {
-        // ESP_LOGI(TAG, "|PING");
-        writeMessage(pingResp(message.source, MSG_BMS));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 0 && message.command == 0x01) {
-        // MYSTERY BATTERY COMMAND 01
-        uint8_t payload[] = {0x02, 0x02};
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 0 && message.command == CMD_BAT_STATUS_MOTOR_OFF) {
-        state->motorOffAck = true;
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == CMD_BAT_STATUS_ASSIST) {
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 0 && message.command == CMD_BAT_WAKEUP) {
-        xEventGroupSetBits(controlEventGroup, WAKEUP_BIT);                     
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == CMD_BAT_CALIBRATE) {
-        xEventGroupSetBits(controlEventGroup, CALIBRATE_BIT);                     
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == CMD_BAT_SET_LIGHT) {
-        setLight(message.payload[0]);
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 1 && message.command == CMD_BAT_SET_ASSIST_LEVEL) {
-        state->level = message.payload[0];
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command));
-        return CONTROL_TO_SENDER;
-#if CONFIG_ION_CU3
-    } else if(handleCu3Message(message)) {
-        return CONTROL_TO_SENDER;
-#endif
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 2 && message.command == CMD_GET_DATA && message.payload[1] == 0x2a) {
-        // GET DATA 002a 00:2a(Unknown)
-        uint8_t payload[] = {0x00, message.payload[0], message.payload[1], 0x01};
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 4 && message.command == CMD_GET_DATA && message.payload[1] == 0x38 && message.payload[3] == 0x3a) {
-        uint8_t *payload = calibrationLoad();
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, 11));
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == CMD_PUT_DATA && message.payload[1] == 0xc0 && message.payload[5] == 0xc1) {
-        // PUT DATA c0/c1
-        state->speed = toUint16(message.payload, 2);
-        distanceUpdate(toUint32(message.payload, 6));
-
-        uint8_t payload[] = {0x00};
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
-        requestDisplayUpdate();
-        return CONTROL_TO_SENDER;
-    } else if(message.type == MSG_CMD_REQ && message.payloadSize == 10 && message.command == CMD_PUT_DATA && message.payload[1] == 0x38 && message.payload[5] == 0x3a) {
-        // PUT DATA 38/3a
-        if(!calibrationSave(message.payload)) {
-            return CONTROL_TO_SENDER;
-        }
-
-        uint8_t payload[] = {0x00};
-        writeMessage(cmdResp(message.source, MSG_BMS, message.command, payload, sizeof(payload)));
-        return CONTROL_TO_SENDER;
-    }
-
-    ESP_LOGI(TAG, "Unexpected: Tgt:%d, Src:%d, Type:%d, Command:%d", message.target, message.source, message.type, message.command);
-    ESP_LOG_BUFFER_HEX(TAG, message.payload, message.payloadSize);
-
-    return CONTROL_TO_SENDER;
-}
-
-static bool handoff(ion_state * state) {
+static void doHandoff(ion_state * state) {
 
 #if CONFIG_ION_CU3
-    uint8_t handoffTarget = MSG_DISPLAY;
+    writeMessage(handoffMsg(MSG_DISPLAY));
 #else
-    uint8_t handoffTarget = MSG_MOTOR;
+    writeMessage(handoffMsg(MSG_MOTOR));
 #endif
-    writeMessage(handoffMsg(handoffTarget));
 
     while(true) {
         // Keep handling responses, and subsequent incoming messages, until someone hands off back to us.
-        messageHandlingResult result = handleMotorMessage(state);
+        messageHandlingResult result = handleMessage(state);
         if(result == CONTROL_TO_US) {
-            return true;
-        }
-        if(result == HANDOFF_TIMEOUT) {
-            return false;
+            return;
+        } else if(result == HANDOFF_TIMEOUT) {
+            // Timeout, assume motor turned off. CU3 will keep chatting, so no timeout then.
+            // Could also have been a CRC error at some point, in that case we might have to start things back up.
+#if CONFIG_ION_CU2
+            stopButtonCheck();
+#endif
+            if(state->state == MOTOR_OFF) {
+                state->doHandoffs = false;
+                toIdleState(state);
+            }
+            return;
         }
     }
 }
@@ -239,13 +144,7 @@ static void my_task(void *pvParameter) {
     loadCharge();
 
 #if CONFIG_ION_CU2
-    initCu2(controlEventGroup, 
-            BUTTON_MODE_SHORT_PRESS_BIT, 
-            BUTTON_MODE_LONG_PRESS_BIT, 
-            BUTTON_LIGHT_SHORT_PRESS_BIT, 
-            BUTTON_LIGHT_LONG_PRESS_BIT, 
-            IGNORE_HELD_BIT
-    );
+    initCu2();
 #endif
 
     initDisplay();
@@ -295,13 +194,13 @@ static void my_task(void *pvParameter) {
         }
 #endif
 
-        EventBits_t buttonBits = xEventGroupWaitBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT | BUTTON_MODE_LONG_PRESS_BIT | BUTTON_LIGHT_SHORT_PRESS_BIT | BUTTON_LIGHT_LONG_PRESS_BIT | WAKEUP_BIT | CALIBRATE_BIT, true, false, 0);
-        const bool modeShortPress  = (buttonBits & BUTTON_MODE_SHORT_PRESS_BIT)  != 0;
-        const bool modeLongPress   = (buttonBits & BUTTON_MODE_LONG_PRESS_BIT)   != 0;
+        EventBits_t buttonBits = waitControlBits(BUTTON_MODE_SHORT_PRESS_BIT | BUTTON_MODE_LONG_PRESS_BIT | BUTTON_LIGHT_SHORT_PRESS_BIT | BUTTON_LIGHT_LONG_PRESS_BIT | WAKEUP_BIT | CALIBRATE_BIT, true, false, 0);
+        const bool modeShortPress = (buttonBits & BUTTON_MODE_SHORT_PRESS_BIT) != 0;
+        const bool modeLongPress = (buttonBits & BUTTON_MODE_LONG_PRESS_BIT) != 0;
         const bool lightShortPress = (buttonBits & BUTTON_LIGHT_SHORT_PRESS_BIT) != 0;
-        const bool lightLongPress  = (buttonBits & BUTTON_LIGHT_LONG_PRESS_BIT)  != 0;
-        const bool wakeup          = (buttonBits & WAKEUP_BIT)                   != 0;
-        const bool calibrate       = (buttonBits & CALIBRATE_BIT)                != 0;
+        const bool lightLongPress = (buttonBits & BUTTON_LIGHT_LONG_PRESS_BIT) != 0;
+        const bool wakeup = (buttonBits & WAKEUP_BIT) != 0;
+        const bool calibrate = (buttonBits & CALIBRATE_BIT) != 0;
 
         if(lightShortPress) {
             toggleLight();
@@ -316,18 +215,10 @@ static void my_task(void *pvParameter) {
 
 #if CONFIG_ION_ADC
         EventBits_t bitsToCheck = MEASURE_BAT_BIT;
-        EventBits_t bits = xEventGroupWaitBits(controlEventGroup, bitsToCheck, false, false, 0);
+        EventBits_t bits = waitControlBits(bitsToCheck, false, false, 0);
         if((bits & MEASURE_BAT_BIT) != 0) {
-            xEventGroupClearBits(controlEventGroup, MEASURE_BAT_BIT);
-
-            // Batterij meten
+            clearControlBits(MEASURE_BAT_BIT);
             measureBat();
-
-#if CONFIG_ION_CURR_ADC
-            // Stroom meten tegelijk
-            measureCurrent();
-            chargeUpdate(getBatMv(), getBatMa());
-#endif
         } else
 #endif
         if(handleDisplayUpdate(&state)) {
@@ -353,17 +244,7 @@ static void my_task(void *pvParameter) {
         }
 
         if(state.doHandoffs) {
-            if(!handoff(&state)) {
-                // Timeout, assume motor turned off. CU3 will keep chatting, so no timeout then.
-                // Could also have been a CRC error at some point, in that case we might have to start things back up.
-#if CONFIG_ION_CU2
-                stopButtonCheck();
-#endif
-                if(state.state == MOTOR_OFF) {
-                    state.doHandoffs = false;
-                    toIdleState(&state);
-                }
-            }
+            doHandoff(&state);
         }
     }
 
@@ -380,7 +261,7 @@ extern "C" void app_main() {
     }
     ESP_ERROR_CHECK(ret);
 
-    controlEventGroup = xEventGroupCreate();
+    initControlEventGroup();
 
     xTaskCreatePinnedToCore(my_task, "my_task", 4096 * 2, NULL, 5, NULL, SECOND_CPU);
 
@@ -392,10 +273,10 @@ extern "C" void app_main() {
         if(xQueueReceive(button_events, &ev, 1000 / portTICK_PERIOD_MS)) {
             if((ev.pin == BUTTON || ev.pin == BUTTON_EXT) && (ev.event == BUTTON_UP)) {
                 held = false;
-                xEventGroupSetBits(controlEventGroup, BUTTON_MODE_SHORT_PRESS_BIT);
+                setControlBits(BUTTON_MODE_SHORT_PRESS_BIT);
             }
             if(!held && (ev.pin == BUTTON || ev.pin == BUTTON_EXT) && (ev.event == BUTTON_HELD)) {
-                xEventGroupSetBits(controlEventGroup, BUTTON_LIGHT_LONG_PRESS_BIT);
+                setControlBits(BUTTON_LIGHT_LONG_PRESS_BIT);
                 held = true;
             }
         }

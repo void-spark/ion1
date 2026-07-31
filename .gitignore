@@ -4,3 +4,5 @@ sdkconfig
 *.pyc 
 sdk
 ipch/
+.idea
+*.iml

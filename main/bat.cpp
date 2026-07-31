@@ -10,9 +10,8 @@ static const char *TAG = "bat";
 static uint32_t chargeFullMah = (CONFIG_ION_BAT_CHARGE * 3);
 
 // ADC Attenuation
-// 11DB = 3.55 voltage gain, reference voltage should be around 1100mv,
-// so max theoretical measurement would be 3905mv, actual/recommended(?) is a lot lower.
-#define ADC_ATTEN ADC_ATTEN_DB_11
+// Usable measuring range according to the manual for 12db is 150 ∼ 2450 mV
+#define ADC_ATTEN ADC_ATTEN_DB_12
 
 static bool cali_enable = false;
 static adc_oneshot_unit_handle_t adc1_handle = NULL;
@@ -24,6 +23,7 @@ static uint32_t batMv = 27600;
 static uint32_t batMa = 0;
 static uint32_t historyMa = 0;
 
+static bool haveMeasurement;
 static uint32_t history;
 static uint8_t batPercentage;
 
@@ -107,9 +107,9 @@ uint32_t measureBatMv() {
     if (cali_enable) {
         ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc1_cali_handle, adc_raw, &adcVoltageMv));
     } else {
-        // ADC_BITWIDTH_DEFAULT means use max bits, which is SOC_ADC_RTC_MAX_BITWIDTH
-        // 11DB is a factor 3.55, and base reference voltage is 1V (I think)
-        adcVoltageMv = (adc_raw * 3550) / (1 << SOC_ADC_RTC_MAX_BITWIDTH);
+        // ADC_BITWIDTH_DEFAULT means use max bits, which is ADC_BITWIDTH_DEFAULT
+        // Manual says vref is 1100mv, to be divided by attenuation (0.25% at 12db), so multiplied by 4 = 4400.
+        adcVoltageMv = (adc_raw * 4400) / (1 << ADC_BITWIDTH_DEFAULT);
     }
 
     // Calculate actual voltage in mv
@@ -133,7 +133,6 @@ uint32_t measureCurrentMv() {
 }
 
 static uint8_t batMvToPercentage(uint32_t batMv) {
-
     // Calculate the percentage
     uint32_t percentage = (batMv < emptyMv) ? 0 : ((batMv - emptyMv) * 100) / (fullMv - emptyMv);
 
@@ -161,6 +160,7 @@ void measureBat() {
 	history -= avg;
 
     batPercentage = batMvToPercentage(avg);
+    haveMeasurement = true;
 }
 
 void measureCurrent() {
@@ -168,11 +168,16 @@ void measureCurrent() {
 }
 
 uint32_t getBatMv() {
+    if(!haveMeasurement) {
+        // Use a fake value of 27.6v when we don't have ADC.
+        return 27600;
+    }
+
     return batMv;
 }
 
 uint8_t getBatPercentage() {
-    if(batMv == 0) {
+    if(!haveMeasurement) {
         // Use a fake value of 50% when we don't have ADC.
         return 50;
     }
@@ -185,8 +190,6 @@ uint32_t getBatMa() {
 }
 
 void adc_teardown() {
-
-    // Tear Down
     ESP_ERROR_CHECK(adc_oneshot_del_unit(adc1_handle));
     if (cali_enable) {
         adc_calibration_deinit();

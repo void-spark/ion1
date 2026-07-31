@@ -72,7 +72,7 @@ void handleTurnMotorOnState(ion_state * state) {
         startButtonCheck();
     } else if(state->step == 4) {
         // Set default display, which is shown if the display isn't updated for a bit (?)
-			// setDefault   assistLevel assistBlink wrench    total       trip      light     bars        comma     km          top         bottom      miles batPercentage topVal bottomVal
+	// setDefault   assistLevel assistBlink wrench    total       trip      light     bars        comma     km          top         bottom      miles batPercentage topVal bottomVal
         // displayUpdateCu2(f, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_SOLID, BLNK_SOLID, true, 100, 0xccc, 0xccccc);
         displayUpdateCu2(true, ASS_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, BLNK_OFF, BLNK_SOLID, false, getChargePercentage(), 0xccc, digits(getTotal() / 100, 5, 1));
     } else 

@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 struct batData {
     uint32_t trip1;
@@ -21,5 +22,5 @@ bool batDataLoad(void);
 bool batDataSave(void);
 
 // calibration API
-uint8_t *calibrationLoad(void);
-bool calibrationSave(uint8_t *source);
+bool calibrationLoad(void *out_value, size_t length);
+bool calibrationSave(const void *value, size_t length);

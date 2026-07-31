@@ -1,6 +1,5 @@
 #include "storage.h"
 #include "nvs_flash.h"
-#include "nvs.h"
 #include "esp_log.h"
 #include <string.h>     // <-- toegevoegd voor memcpy()
 
@@ -82,44 +81,25 @@ bool batDataSave(void)
 // Calibration API
 // -----------------------------------------------------------------------------
 
-uint8_t *calibrationLoad(void)
-{
-    static uint8_t payload[11];
-
-    // Byte 0 is altijd 0x00
-    payload[0] = 0x00;
-
-    // Fallback calibratie (10 bytes)
-    static const uint8_t fallback[10] = {
-        0x94, 0x38, 0x4b, 0x15, 0x28, 0x3a, 0x3e, 0x91, 0x79, 0x50
-    };
-
-    // Probeer calibratie uit NVS te lezen
+bool calibrationLoad(void *out_value, size_t length) {
     nvs_handle_t handle;
-    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle);
-
-    if (err == ESP_OK) {
-        size_t size = 10;
-        err = nvs_get_blob(handle, NVS_KEY_CALIB, payload + 1, &size);
-        nvs_close(handle);
-
-        if (err == ESP_OK) {
-            return payload;    // Succesvol geladen
-        }
+    if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) {
+        return false;
     }
 
-    // Geen calibratie ? fallback
-    memcpy(payload + 1, fallback, 10);
-    return payload;
+    esp_err_t err = nvs_get_blob(handle, NVS_KEY_CALIB, out_value, &length);
+    nvs_close(handle);
+
+    return (err == ESP_OK);
 }
 
-bool calibrationSave(uint8_t *source)
-{
+bool calibrationSave(const void *value, size_t length) {
     nvs_handle_t handle;
-    if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK)
+    if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) {
         return false;
+    }
 
-    esp_err_t err = nvs_set_blob(handle, NVS_KEY_CALIB, source, 10);
+    esp_err_t err = nvs_set_blob(handle, NVS_KEY_CALIB, value, length);
     if (err != ESP_OK) {
         nvs_close(handle);
         return false;

@@ -234,6 +234,17 @@ void writeMessage(const messageType& message) {
     writeMessage(data, length);
 }
 
+/**
+ * Send request message, and wait for (any) response message addressed to us.
+ * If timeout is not set (0), will keep reading messages on the bus until we get a response message addressed to us.
+ * If timeout is set and attempts is 0, will keep reading messages on the bus until we get a response message addressed to us,
+ * and will re-send the request each time the bus has been quiet for the given timeout time.
+ * If attempts is > 0, will do the same, but will stop and return MSG_NO_REPLY on the 'attempts'th timeout.
+ *
+ * Returns:
+ * MSG_OK if we received a response.
+ * MSG_NO_REPLY (only for attempts > 0) if after the given attempts, no valid response was received.
+ */
 readResult exchange(const messageType& outMessage, messageType *inMessage, const TickType_t timeout, const uint32_t attempts) {
     writeMessage(outMessage);
     uint32_t count = 1;

@@ -24,7 +24,7 @@ uint32_t getTotal() {
 void distanceUpdate(uint32_t distance) {
 
     if (distance < lastDistance) {
-        // Motor is opnieuw opgestart → teller terug naar 0
+        // Motor is opnieuw opgestart ? teller terug naar 0
         lastDistance = 0;
     }
 
